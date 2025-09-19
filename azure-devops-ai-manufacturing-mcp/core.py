@@ -13,14 +13,28 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from urllib.parse import urlparse
 
-from .interface import AzureDevOpsMultiPlatformInterface
-from .types import (
-    OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
-    AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus,
-    DashboardData, DEFAULT_STATE_MAPPING, WorkItemTypeDefinition, FieldDefinition,
-    BoardConfiguration, RepositoryInfo, BuildDefinition, TeamConfiguration,
-    AreaPath, IterationPath
-)
+try:
+    # Import with explicit module path to avoid conflict with built-in types
+    from . import types as mcp_types
+    from interface import AzureDevOpsMultiPlatformInterface
+    from mcp_types import (
+        OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
+        AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus,
+        DashboardData, DEFAULT_STATE_MAPPING, WorkItemTypeDefinition, FieldDefinition,
+        BoardConfiguration, RepositoryInfo, BuildDefinition, TeamConfiguration,
+        AreaPath, IterationPath
+    )
+except ImportError:
+    # Import with explicit module path to avoid conflict with built-in types
+    from . import types as mcp_types
+    from interface import AzureDevOpsMultiPlatformInterface
+    from mcp_types import (
+        OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
+        AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus,
+        DashboardData, DEFAULT_STATE_MAPPING, WorkItemTypeDefinition, FieldDefinition,
+        BoardConfiguration, RepositoryInfo, BuildDefinition, TeamConfiguration,
+        AreaPath, IterationPath
+    )
 from .config_manager import ConfigurationManager
 from .workflow_manager import WorkflowManager
 from .artifact_manager import ArtifactManager

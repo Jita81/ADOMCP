@@ -7,10 +7,20 @@ integration operations following the Standardized Modules Framework.
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
-from .types import (
-    OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
-    AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus, DashboardData
-)
+try:
+    # Import with explicit module path to avoid conflict with built-in types
+    from . import types as mcp_types
+    from mcp_types import (
+        OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
+        AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus, DashboardData
+    )
+except ImportError:
+    # Import with explicit module path to avoid conflict with built-in types
+    from . import types as mcp_types
+    from mcp_types import (
+        OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
+        AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus, DashboardData
+    )
 
 
 class AzureDevOpsMultiPlatformInterface(ABC):
