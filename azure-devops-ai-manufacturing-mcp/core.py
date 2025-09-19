@@ -39,6 +39,7 @@ from .config_manager import ConfigurationManager
 from .workflow_manager import WorkflowManager
 from .artifact_manager import ArtifactManager
 from .cache_manager import CacheManager
+from .attachment_manager import AttachmentManager
 
 
 class AzureDevOpsMultiPlatformMCP(AzureDevOpsMultiPlatformInterface):
@@ -71,6 +72,9 @@ class AzureDevOpsMultiPlatformMCP(AzureDevOpsMultiPlatformInterface):
             connection_string=config.get('config_db_url'),
             encryption_key=config.get('config_encryption_key')
         )
+        
+        # Initialize attachment manager
+        self.attachment_manager = AttachmentManager(self.organization_url, self.azure_devops_pat)
         
         self.workflow_manager = WorkflowManager(
             manufacturing_phases=config.get('manufacturing_phases', DEFAULT_PHASES)

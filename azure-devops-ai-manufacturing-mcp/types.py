@@ -38,6 +38,19 @@ class GitProvider(Enum):
 
 
 @dataclass
+class WorkItemAttachment:
+    """Work item attachment data structure"""
+    id: str
+    name: str
+    size: int
+    url: str
+    content_type: str = "text/markdown"
+    content: Optional[str] = None  # For markdown content
+    upload_date: Optional[datetime] = None
+    comment: Optional[str] = None
+
+
+@dataclass
 class OperationResult:
     """Standard operation result structure"""
     success: bool
@@ -82,6 +95,10 @@ class WorkItemData:
     priority: Optional[int] = None
     tags: Optional[List[str]] = None
     fields: Optional[Dict[str, Any]] = None  # Flexible field mapping for custom fields
+    
+    # Attachment support
+    attachments: List[WorkItemAttachment] = field(default_factory=list)
+    
     github_issue_data: Optional[Dict[str, Any]] = None  # GitHub-specific fields
     gitlab_issue_data: Optional[Dict[str, Any]] = None  # GitLab-specific fields
 
@@ -95,6 +112,10 @@ class WorkItemUpdate:
     updates: Dict[str, Any]  # Field updates as key-value pairs
     comment: Optional[str] = None
     transition_state: Optional[str] = None  # New state to transition to
+    
+    # Attachment operations
+    attachments_to_add: List[WorkItemAttachment] = field(default_factory=list)
+    attachments_to_remove: List[str] = field(default_factory=list)  # Attachment IDs
 
 
 @dataclass
@@ -137,11 +158,11 @@ class PullRequestArtifact:
     status: str  # 'active', 'completed', 'abandoned' (Azure DevOps) or 'open', 'merged', 'closed'
     author: str
     reviewers: List[str]
-    created_date: datetime
-    completed_date: Optional[datetime] = None
     source_branch: str
     target_branch: str
+    created_date: datetime
     work_item_links: List[int]  # Linked work item IDs
+    completed_date: Optional[datetime] = None
 
 
 @dataclass
@@ -151,12 +172,12 @@ class BuildArtifact:
     build_number: str
     status: str
     result: str
-    started_date: datetime
-    finished_date: Optional[datetime] = None
     repository_url: str
     source_branch: str
     commit_hash: str
     build_url: str
+    started_date: datetime
+    finished_date: Optional[datetime] = None
 
 
 @dataclass
@@ -165,10 +186,10 @@ class DeploymentArtifact:
     deployment_id: str
     environment: str
     status: str
-    started_date: datetime
-    completed_date: Optional[datetime] = None
     deployment_url: str
     release_version: str
+    started_date: datetime
+    completed_date: Optional[datetime] = None
 
 
 @dataclass

@@ -18,6 +18,8 @@ A comprehensive Model Context Protocol (MCP) module that provides unified integr
 
 ### 📊 Advanced Work Item Operations
 - **Dynamic Work Item Creation**: Create and update work items with flexible field mapping
+- **Attachment Management**: Upload and manage markdown documents and files attached to work items
+- **Multi-Document Support**: Attach multiple documents per work item with full content retrieval
 - **Bulk Operations**: Efficient batch processing of work items and issues
 - **State Management**: Automated state transitions and workflow progression
 - **Field Mapping**: Customizable field mappings between different platforms
@@ -113,7 +115,7 @@ async def main():
     mcp = AzureDevOpsMultiPlatformMCP(config)
 
     async with mcp:
-        # Create a work item with flexible data structure
+        # Create a work item with flexible data structure and attachments
         work_item_data = WorkItemData(
             organization="YourOrg",
             project="YourProject",
@@ -124,7 +126,11 @@ async def main():
                 "System.Tags": "authentication;security;oauth",
                 "Microsoft.VSTS.Common.Priority": "2",
                 "Custom.Tokens": 15000  # Custom field example
-            }
+            },
+            attachments=[
+                # Optional: Add markdown documentation
+                # Attachments can be created separately and added here
+            ]
         )
 
         # Create the work item
@@ -175,9 +181,116 @@ class AzureDevOpsMultiPlatformMCP:
     async def transition_work_item_state(self, work_item_id: int, target_state: str) -> OperationResult
     async def attach_artifacts(self, work_item_id: int, artifacts: dict) -> OperationResult
     async def sync_repository_activity(self, repository_url: str, work_item_id: int = None) -> OperationResult
+    
+    # Attachment Management
+    async def get_work_item_attachments(self, work_item_id: int, project: str) -> OperationResult
+    async def add_work_item_attachment(self, work_item_id: int, project: str, 
+                                     content: str, filename: str) -> OperationResult
+    async def remove_work_item_attachment(self, work_item_id: int, project: str, 
+                                        attachment_id: str) -> OperationResult
 ```
 
 ## 🧪 Examples
+
+### Working with Attachments and Markdown Documents
+
+```python
+# Example: Creating work items with markdown documentation
+async def create_work_item_with_documentation():
+    # Create markdown documentation
+    requirements_doc = """
+# Feature Requirements
+
+## Overview
+This feature implements user authentication with OAuth 2.0.
+
+## Functional Requirements
+1. **User Login**: Support for email/password and social login
+2. **Token Management**: JWT tokens with refresh capability
+3. **Role-Based Access**: Admin, User, and Guest roles
+
+## Technical Requirements
+- OAuth 2.0 compliance
+- JWT token implementation
+- Database integration for user management
+- API rate limiting
+
+## Acceptance Criteria
+- ✅ Users can log in with email/password
+- ✅ Social login (Google, GitHub) working
+- ✅ Tokens expire and refresh correctly
+- ✅ Role-based access controls enforced
+    """
+
+    design_doc = """
+# Technical Design
+
+## Architecture
+- **Frontend**: React.js with Auth0 integration
+- **Backend**: Python FastAPI with JWT middleware
+- **Database**: PostgreSQL with user tables
+
+## API Endpoints
+```
+POST /auth/login
+POST /auth/refresh
+POST /auth/logout
+GET /auth/profile
+```
+
+## Security Considerations
+- HTTPS only in production
+- Secure JWT secret management
+- Rate limiting on auth endpoints
+    """
+
+    # Upload documents and create work item
+    mcp = AzureDevOpsMultiPlatformMCP(config)
+    
+    async with mcp:
+        # Upload markdown documents
+        requirements_attachment = await mcp.attachment_manager.upload_markdown_document(
+            markdown_content=requirements_doc,
+            filename="requirements.md",
+            project="YourProject"
+        )
+        
+        design_attachment = await mcp.attachment_manager.upload_markdown_document(
+            markdown_content=design_doc,
+            filename="design.md",
+            project="YourProject"
+        )
+        
+        # Create work item with attachments
+        work_item_data = WorkItemData(
+            organization="YourOrg",
+            project="YourProject",
+            work_item_type="User Story",
+            title="OAuth Authentication Implementation",
+            description="Implement OAuth-based authentication with comprehensive documentation",
+            fields={
+                "System.Tags": "authentication;oauth;security",
+                "Microsoft.VSTS.Common.Priority": "1",
+                "Custom.Tokens": 25000
+            },
+            attachments=[requirements_attachment, design_attachment]
+        )
+        
+        result = await mcp.create_work_item(work_item_data)
+        
+        if result.success:
+            work_item_id = result.data['id']
+            print(f"Created work item {work_item_id} with documentation")
+            
+            # Read back attachments to verify
+            attachments_result = await mcp.get_work_item_attachments(work_item_id, "YourProject")
+            
+            if attachments_result.success:
+                for attachment in attachments_result.data:
+                    print(f"Attachment: {attachment.name} ({attachment.size} bytes)")
+                    if attachment.content:
+                        print(f"Content preview: {attachment.content[:100]}...")
+```
 
 ### Working with Custom Fields
 
@@ -231,6 +344,56 @@ async with mcp:
         platform="github",
         relationship="related"
     )
+```
+
+### Managing Attachments in Work Items
+
+```python
+# Example: Adding attachments to existing work items
+async def add_documentation_to_work_item(work_item_id: int):
+    mcp = AzureDevOpsMultiPlatformMCP(config)
+    
+    async with mcp:
+        # Add a markdown document to an existing work item
+        result = await mcp.add_work_item_attachment(
+            work_item_id=work_item_id,
+            project="YourProject",
+            content="""
+# Implementation Notes
+
+## Progress Update
+- ✅ Database schema designed
+- ✅ API endpoints defined
+- 🔄 Authentication logic in progress
+- ⏳ Frontend integration pending
+
+## Next Steps
+1. Complete OAuth integration
+2. Add unit tests
+3. Performance testing
+4. Security review
+
+## Resources
+- [OAuth 2.0 Specification](https://oauth.net/2/)
+- [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
+            """.strip(),
+            filename="implementation_notes.md"
+        )
+        
+        if result.success:
+            print("Successfully added implementation notes")
+            
+        # Read all attachments from the work item
+        attachments_result = await mcp.get_work_item_attachments(work_item_id, "YourProject")
+        
+        if attachments_result.success:
+            print(f"Work item {work_item_id} has {len(attachments_result.data)} attachments:")
+            for attachment in attachments_result.data:
+                print(f"  📄 {attachment.name} ({attachment.content_type})")
+                if attachment.content and attachment.content_type == "text/markdown":
+                    lines = attachment.content.count('\n') + 1
+                    words = len(attachment.content.split())
+                    print(f"     📊 {lines} lines, ~{words} words")
 ```
 
 ### Bulk Operations
@@ -298,7 +461,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📊 Project Status
 
 - ✅ **Core Functionality**: Complete
-- ✅ **Azure DevOps Integration**: Full support
+- ✅ **Azure DevOps Integration**: Full support with attachments
+- ✅ **Work Item Attachments**: Markdown document support implemented
+- ✅ **Multi-Document Support**: Multiple attachments per work item
+- ✅ **Content Retrieval**: Full markdown content reading
 - ✅ **GitHub Integration**: Full support
 - ✅ **GitLab Integration**: Full support
 - ✅ **Custom Field Support**: Validated

@@ -67,9 +67,10 @@ class AzureDevOpsMultiPlatformInterface(ABC):
     async def create_work_item(self, work_item_data: WorkItemData) -> OperationResult:
         """
         Create work item with flexible field mapping for multi-platform support.
+        Supports attachments including markdown documents.
 
         Args:
-            work_item_data: WorkItemData with all required fields
+            work_item_data: WorkItemData with all required fields and optional attachments
 
         Returns:
             OperationResult with created work item ID and details
@@ -93,9 +94,10 @@ class AzureDevOpsMultiPlatformInterface(ABC):
     async def update_work_item(self, work_item_update: WorkItemUpdate) -> OperationResult:
         """
         Update work item fields and optionally transition state.
+        Supports adding/removing attachments including markdown documents.
 
         Args:
-            work_item_update: WorkItemUpdate with field updates and optional state transition
+            work_item_update: WorkItemUpdate with field updates, optional state transition, and attachment operations
 
         Returns:
             OperationResult with update confirmation
@@ -142,6 +144,56 @@ class AzureDevOpsMultiPlatformInterface(ABC):
             
         Returns:
             OperationResult with sync status
+        """
+        pass
+    
+    # Work Item Attachment Operations
+    @abstractmethod
+    async def get_work_item_attachments(self, work_item_id: int, project: str) -> OperationResult:
+        """
+        Get all attachments for a work item, including markdown document content.
+
+        Args:
+            work_item_id: Work item ID
+            project: Project ID or name
+
+        Returns:
+            OperationResult with list of WorkItemAttachment objects
+        """
+        pass
+
+    @abstractmethod
+    async def add_work_item_attachment(self, work_item_id: int, project: str, 
+                                     content: str, filename: str, 
+                                     content_type: str = "text/markdown") -> OperationResult:
+        """
+        Add an attachment to a work item.
+
+        Args:
+            work_item_id: Work item ID
+            project: Project ID or name
+            content: Content to attach (string for text/markdown)
+            filename: Name of the attachment
+            content_type: MIME type of the content
+
+        Returns:
+            OperationResult with attachment details
+        """
+        pass
+
+    @abstractmethod
+    async def remove_work_item_attachment(self, work_item_id: int, project: str, 
+                                        attachment_id: str) -> OperationResult:
+        """
+        Remove an attachment from a work item.
+
+        Args:
+            work_item_id: Work item ID
+            project: Project ID or name
+            attachment_id: ID of the attachment to remove
+
+        Returns:
+            OperationResult with removal confirmation
         """
         pass
     
