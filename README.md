@@ -1,50 +1,55 @@
-# Azure DevOps AI Manufacturing MCP
+# Azure DevOps Multi-Platform MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Azure DevOps](https://img.shields.io/badge/Azure%20DevOps-Compatible-blue.svg)](https://dev.azure.com/)
+[![GitHub](https://img.shields.io/badge/GitHub-Compatible-green.svg)](https://github.com/)
+[![GitLab](https://img.shields.io/badge/GitLab-Compatible-orange.svg)](https://gitlab.com/)
 
-A comprehensive Model Context Protocol (MCP) module that integrates AI-powered manufacturing workflows with Azure DevOps, providing automated work item management, quality gates, and development artifact tracking.
+A comprehensive Model Context Protocol (MCP) module that provides unified integration with Azure DevOps, GitHub, and GitLab, enabling seamless work item management, repository synchronization, and cross-platform development workflows.
 
 ## 🚀 Features
 
-### 🏭 AI Manufacturing Workflow
-- **Automated Lifecycle Management**: Complete work item progression from Analysis to Deployment
-- **AI-Powered Code Generation**: Intelligent code creation and review processes
-- **Quality Gate Integration**: Automated testing and validation at each phase
-- **Custom Process Support**: Adapts to your Azure DevOps process templates and custom states
+### 🔄 Multi-Platform Integration
+- **Unified Work Item Management**: Seamless creation and updates across Azure DevOps, GitHub, and GitLab
+- **Cross-Platform Synchronization**: Real-time sync of issues, work items, and development activities
+- **Custom Field Support**: Full integration with platform-specific custom fields
+- **Flexible Data Structures**: API-driven data models that adapt to your requirements
 
-### 📊 Advanced Work Item Management
-- **Smart Work Item Creation**: AI-generated work items with manufacturing metadata
-- **Progress Tracking**: Real-time progress monitoring with detailed metrics
-- **Custom Field Support**: Full integration with custom fields (e.g., tokens, cost tracking)
-- **State Transition Automation**: Intelligent workflow progression based on quality gates
+### 📊 Advanced Work Item Operations
+- **Dynamic Work Item Creation**: Create and update work items with flexible field mapping
+- **Bulk Operations**: Efficient batch processing of work items and issues
+- **State Management**: Automated state transitions and workflow progression
+- **Field Mapping**: Customizable field mappings between different platforms
 
-### 🔗 Development Integration
-- **Multi-Platform Git Support**: Azure Repos, GitHub, and GitLab integration
-- **Artifact Attachment**: Automatic linking of commits, pull requests, and releases
-- **Repository Activity Sync**: Real-time synchronization of development activities
-- **Code Quality Metrics**: Integrated code analysis and quality scoring
+### 🔗 Development Artifact Integration
+- **Multi-Git Platform Support**: Azure Repos, GitHub, and GitLab repository integration
+- **Artifact Linking**: Automatic attachment of commits, pull requests, and releases
+- **Repository Synchronization**: Real-time sync of development activities across platforms
+- **Cross-Reference Management**: Link work items across different platforms
 
 ### ⚡ Performance & Scalability
-- **High-Performance Caching**: Multi-tier caching with Redis support
-- **Rate Limiting**: Intelligent API rate limiting and burst capacity management
+- **High-Performance Caching**: Multi-tier caching with Redis support for all platforms
+- **Intelligent Rate Limiting**: Platform-aware rate limiting and burst capacity management
 - **Asynchronous Operations**: Non-blocking operations for maximum throughput
-- **Configuration Management**: Secure, versioned configuration with encryption
+- **Secure Configuration**: Encrypted configuration management with platform tokens
 
 ### 📈 Monitoring & Analytics
-- **Performance Metrics**: Comprehensive monitoring of manufacturing processes
-- **Azure DevOps Analytics**: Deep integration with Azure DevOps reporting
-- **Quality Insights**: Manufacturing quality trends and improvement recommendations
-- **Cost Tracking**: AI token usage and cost management (with custom fields)
+- **Performance Metrics**: Comprehensive monitoring across all integrated platforms
+- **Analytics Integration**: Deep integration with platform-specific analytics
+- **Cross-Platform Insights**: Unified view of development activities
+- **Health Monitoring**: Real-time status monitoring of all integrations
 
 ## 🛠️ Installation
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Azure DevOps organization with appropriate permissions
-- Personal Access Token (PAT) with work item and repository access
+- Accounts on target platforms (Azure DevOps, GitHub, GitLab)
+- Appropriate API tokens for each platform:
+  - Azure DevOps: Personal Access Token (PAT)
+  - GitHub: Personal Access Token or GitHub App
+  - GitLab: Personal Access Token or Project Token
 - Optional: Redis for caching (recommended for production)
 
 ### Quick Setup
@@ -77,7 +82,9 @@ pip install -e .
 ```python
 config = {
     'azure_devops_organization_url': 'https://dev.azure.com/YourOrg',
-    'personal_access_token': 'your_pat_token_here',
+    'azure_devops_pat': 'your_azure_devops_token_here',
+    'github_token': 'your_github_token_here',
+    'gitlab_token': 'your_gitlab_token_here',
     'default_project': 'YourProject',
     'rate_limit_rps': 10,
     'burst_capacity': 100,
@@ -91,37 +98,38 @@ config = {
 
 ```python
 import asyncio
-from azure_devops_ai_manufacturing_mcp import AzureDevOpsAIManufacturingMCP
-from azure_devops_ai_manufacturing_mcp.types import ManufacturingWorkItem, ManufacturingMetadata
+from azure_devops_multiplatform_mcp import AzureDevOpsMultiPlatformMCP
+from azure_devops_multiplatform_mcp.types import WorkItemData
 
 async def main():
     config = {
         'azure_devops_organization_url': 'https://dev.azure.com/YourOrg',
-        'personal_access_token': 'your_pat_here',
+        'azure_devops_pat': 'your_azure_devops_token_here',
+        'github_token': 'your_github_token_here',
+        'gitlab_token': 'your_gitlab_token_here',
         'default_project': 'YourProject'
     }
-    
-    mcp = AzureDevOpsAIManufacturingMCP(config)
-    
+
+    mcp = AzureDevOpsMultiPlatformMCP(config)
+
     async with mcp:
-        # Create a manufacturing work item
-        work_item = ManufacturingWorkItem(
+        # Create a work item with flexible data structure
+        work_item_data = WorkItemData(
             organization="YourOrg",
             project="YourProject",
             work_item_type="User Story",
-            title="AI-Generated Authentication Service",
-            description="Automated authentication service with OAuth integration",
-            manufacturing_metadata=ManufacturingMetadata(
-                manufacturing_id="auth_service_001",
-                ai_generator="gpt-4",
-                confidence_score=95.0,
-                complexity_score=7
-            )
+            title="Authentication Service Implementation",
+            description="Implement OAuth-based authentication service",
+            fields={
+                "System.Tags": "authentication;security;oauth",
+                "Microsoft.VSTS.Common.Priority": "2",
+                "Custom.Tokens": 15000  # Custom field example
+            }
         )
-        
+
         # Create the work item
-        result = await mcp.create_manufacturing_work_item(work_item)
-        
+        result = await mcp.create_work_item(work_item_data)
+
         if result.success:
             print(f"Created work item: {result.data['id']}")
 
@@ -129,46 +137,44 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## 📊 Manufacturing Workflow
+## 📊 Workflow Integration
 
-The module supports a complete AI manufacturing lifecycle:
+The module supports flexible workflow integration across platforms:
 
 ```
-📋 Analysis (New)
-    ↓ Requirements gathering and AI model selection
+📋 New
+    ↓ Initial work item creation and planning
 
-🎯 Planning (Active) 
-    ↓ Technical design and architecture planning
+🎯 Active
+    ↓ Active development and implementation
 
-⚙️ Code Generation (Active)
-    ↓ AI-driven code implementation
+🔍 Resolved
+    ↓ Review and validation phase
 
-🔍 Code Review (Resolved)
-    ↓ Peer review and quality validation
+🧪 Test *
+    ↓ Testing and quality assurance
 
-🧪 Testing (Test) *
-    ↓ Comprehensive testing and validation
-
-🚀 Deployment (Closed)
-    ↓ Production deployment and monitoring
+🚀 Closed
+    ↓ Completion and deployment
 ```
 
-*Custom states are automatically detected and integrated
+*Custom states and workflows are automatically detected and supported
 
 ## 🔧 API Reference
 
 ### Core Classes
 
-#### `AzureDevOpsAIManufacturingMCP`
+#### `AzureDevOpsMultiPlatformMCP`
 
-Main interface for the manufacturing MCP module.
+Main interface for the multi-platform MCP module.
 
 ```python
-class AzureDevOpsAIManufacturingMCP:
-    async def create_manufacturing_work_item(self, work_item: ManufacturingWorkItem) -> OperationResult
-    async def update_manufacturing_progress(self, work_item_id: int, progress_data: ManufacturingProgress) -> OperationResult
-    async def transition_manufacturing_workflow(self, work_item_id: int, target_phase: str) -> OperationResult
-    async def attach_development_artifacts(self, work_item_id: int, artifacts: DevelopmentArtifacts) -> OperationResult
+class AzureDevOpsMultiPlatformMCP:
+    async def create_work_item(self, work_item_data: WorkItemData) -> OperationResult
+    async def update_work_item(self, work_item_id: int, updates: dict) -> OperationResult
+    async def transition_work_item_state(self, work_item_id: int, target_state: str) -> OperationResult
+    async def attach_artifacts(self, work_item_id: int, artifacts: dict) -> OperationResult
+    async def sync_repository_activity(self, repository_url: str, work_item_id: int = None) -> OperationResult
 ```
 
 ## 🧪 Examples
@@ -176,16 +182,71 @@ class AzureDevOpsAIManufacturingMCP:
 ### Working with Custom Fields
 
 ```python
-# Example: Using custom 'tokens' field for AI cost tracking
-work_item_data = {
-    "title": "AI Code Generator",
-    "description": "Advanced code generation with token tracking",
-    "tokens": 15000,  # Custom field for AI token usage
-    "estimated_cost": 0.45
-}
+# Example: Creating work items with custom fields
+work_item_data = WorkItemData(
+    organization="YourOrg",
+    project="YourProject",
+    work_item_type="User Story",
+    title="Authentication Service Implementation",
+    description="Implement OAuth-based authentication service",
+    fields={
+        "System.Tags": "authentication;security;oauth",
+        "Microsoft.VSTS.Common.Priority": "2",
+        "Custom.Tokens": 15000,  # Custom field for token tracking
+        "Custom.EstimatedCost": 0.45  # Custom field for cost tracking
+    }
+)
 
 # The module automatically detects and populates custom fields
-result = await mcp.create_manufacturing_work_item(work_item)
+result = await mcp.create_work_item(work_item_data)
+```
+
+### Cross-Platform Operations
+
+```python
+# Example: Syncing work items across platforms
+async with mcp:
+    # Create work item in Azure DevOps
+    ado_work_item = await mcp.create_work_item(WorkItemData(
+        organization="YourOrg",
+        project="YourProject",
+        work_item_type="User Story",
+        title="Cross-platform feature",
+        fields={"System.Tags": "cross-platform;sync"}
+    ))
+
+    # Create corresponding GitHub issue
+    github_issue = await mcp.create_github_issue(
+        owner="yourorg",
+        repo="yourrepo",
+        title="Cross-platform feature",
+        body="Related Azure DevOps work item: #" + str(ado_work_item.data['id']),
+        labels=["cross-platform", "sync"]
+    )
+
+    # Link them together
+    await mcp.link_work_items(
+        source_item=ado_work_item.data['id'],
+        target_item=github_issue['number'],
+        platform="github",
+        relationship="related"
+    )
+```
+
+### Bulk Operations
+
+```python
+# Example: Bulk update work items
+updates = [
+    {"id": 123, "fields": {"System.State": "Active", "System.AssignedTo": "user@example.com"}},
+    {"id": 124, "fields": {"System.State": "Resolved", "Custom.Tokens": 12000}},
+    {"id": 125, "fields": {"System.Tags": "urgent;bug", "Microsoft.VSTS.Common.Priority": "1"}}
+]
+
+async with mcp:
+    results = await mcp.bulk_update_work_items(updates)
+    successful = sum(1 for r in results if r.success)
+    print(f"Successfully updated {successful}/{len(updates)} work items")
 ```
 
 ## 🔒 Security
@@ -230,20 +291,40 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with the [Standardized Modules Framework v1.0.0](https://github.com/Jita81/Standardized-Modules-Framework-v1.0.0)
-- Powered by Azure DevOps REST APIs
+- Powered by Azure DevOps, GitHub, and GitLab REST APIs
 - Designed for Model Context Protocol (MCP) integration
+- Supports multiple Git platforms for unified development workflows
 
 ## 📊 Project Status
 
 - ✅ **Core Functionality**: Complete
 - ✅ **Azure DevOps Integration**: Full support
+- ✅ **GitHub Integration**: Full support
+- ✅ **GitLab Integration**: Full support
 - ✅ **Custom Field Support**: Validated
-- ✅ **Custom Process Adaptation**: Working
+- ✅ **Cross-Platform Operations**: Working
 - ✅ **Performance Optimization**: Implemented
 - ✅ **Security Features**: Production-ready
 
+## 🚀 Use Cases
+
+### Development Workflow Automation
+- **Unified Issue Tracking**: Manage work items across Azure DevOps, GitHub, and GitLab
+- **Automated State Management**: Synchronize work item states across platforms
+- **Cross-Platform Linking**: Link related work items across different systems
+
+### CI/CD Integration
+- **Artifact Tracking**: Link builds, releases, and deployments to work items
+- **Status Synchronization**: Update work item status based on pipeline results
+- **Repository Activity Sync**: Monitor commits, PRs, and issues across platforms
+
+### Team Collaboration
+- **Multi-Platform Support**: Work across different Git platforms seamlessly
+- **Custom Field Mapping**: Synchronize custom fields between platforms
+- **Bulk Operations**: Efficiently manage multiple work items simultaneously
+
 ---
 
-**Made with ❤️ for AI-powered development workflows**
+**Made with ❤️ for multi-platform development workflows**
 
 For the latest updates and releases, visit our [GitHub repository](https://github.com/Jita81/ADOMCP).

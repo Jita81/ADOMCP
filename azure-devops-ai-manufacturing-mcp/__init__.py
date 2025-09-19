@@ -1,13 +1,13 @@
 """
-Azure DevOps AI Manufacturing MCP - Public Interface Exports
+Azure DevOps Multi-Platform MCP - Public Interface Exports
 
-This module exports the public interface for the Azure DevOps AI Manufacturing MCP
+This module exports the public interface for the Azure DevOps Multi-Platform MCP
 following the Standardized Modules Framework pattern.
 """
 
-from .core import AzureDevOpsAIManufacturingMCP
+from .core import AzureDevOpsMultiPlatformMCP
 from .interface import (
-    AzureDevOpsAIManufacturingInterface,
+    AzureDevOpsMultiPlatformInterface,
     ConfigurationManagerInterface,
     WorkflowManagerInterface,
     ArtifactManagerInterface,
@@ -17,118 +17,110 @@ from .types import (
     # Core data structures
     OperationResult,
     AzureDevOpsProjectStructure,
-    ManufacturingWorkItem,
-    ManufacturingMetadata,
-    ManufacturingProgress,
+    WorkItemData,
+    WorkItemUpdate,
     DevelopmentArtifacts,
-    
+
     # Enums
-    ManufacturingPhase,
     AzureDevOpsWorkItemType,
-    QualityGateStatus,
     GitProvider,
-    
+
     # Artifact types
     CommitArtifact,
     PullRequestArtifact,
     BuildArtifact,
     DeploymentArtifact,
     ArtifactLink,
-    
+
     # Configuration types
     WorkItemTypeDefinition,
     FieldDefinition,
     BoardConfiguration,
     TeamConfiguration,
     RepositoryInfo,
-    
+
     # Result types
     TransitionResult,
     ArtifactResult,
-    QualityGateResult,
-    
+
     # Monitoring types
     HealthStatus,
     DashboardData,
-    
+
     # Constants
-    DEFAULT_PHASES
+    DEFAULT_STATE_MAPPING
 )
 from .config_manager import ConfigurationManager
 from .workflow_manager import WorkflowManager
 from .artifact_manager import ArtifactManager, AzureReposClient, GitHubClient, GitLabClient
 from .cache_manager import CacheManager
-from .monitoring import AzureDevOpsManufacturingMonitor
+from .monitoring import AzureDevOpsMultiPlatformMonitor
 
 # Version information
 __version__ = "1.0.0"
-__author__ = "Azure DevOps AI Manufacturing Team"
-__description__ = "Comprehensive Azure DevOps MCP module for AI-driven software manufacturing processes"
+__author__ = "Azure DevOps Multi-Platform Team"
+__description__ = "Comprehensive MCP module for Azure DevOps, GitHub, and GitLab integration"
 
 # Public API exports
 __all__ = [
     # Main implementation class
-    "AzureDevOpsAIManufacturingMCP",
-    
+    "AzureDevOpsMultiPlatformMCP",
+
     # Interface contracts
-    "AzureDevOpsAIManufacturingInterface",
-    "ConfigurationManagerInterface", 
+    "AzureDevOpsMultiPlatformInterface",
+    "ConfigurationManagerInterface",
     "WorkflowManagerInterface",
     "ArtifactManagerInterface",
     "CacheManagerInterface",
-    
+
     # Supporting manager classes
     "ConfigurationManager",
-    "WorkflowManager", 
+    "WorkflowManager",
     "ArtifactManager",
     "CacheManager",
-    "AzureDevOpsManufacturingMonitor",
-    
+    "AzureDevOpsMultiPlatformMonitor",
+
     # Git client classes
     "AzureReposClient",
-    "GitHubClient", 
+    "GitHubClient",
     "GitLabClient",
-    
+
     # Core data structures
     "OperationResult",
     "AzureDevOpsProjectStructure",
-    "ManufacturingWorkItem",
-    "ManufacturingMetadata",
-    "ManufacturingProgress", 
+    "WorkItemData",
+    "WorkItemUpdate",
     "DevelopmentArtifacts",
-    
+
     # Enums
-    "ManufacturingPhase",
     "AzureDevOpsWorkItemType",
-    "QualityGateStatus",
     "GitProvider",
-    
+
     # Artifact types
     "CommitArtifact",
     "PullRequestArtifact",
     "BuildArtifact",
-    "DeploymentArtifact", 
+    "DeploymentArtifact",
     "ArtifactLink",
-    
+
     # Configuration types
     "WorkItemTypeDefinition",
     "FieldDefinition",
     "BoardConfiguration",
     "TeamConfiguration",
     "RepositoryInfo",
-    
+
     # Result types
     "TransitionResult",
     "ArtifactResult",
-    "QualityGateResult",
-    
+
     # Monitoring types
     "HealthStatus",
     "DashboardData",
-    
+
     # Constants
-    "DEFAULT_PHASES",
-    
+    "DEFAULT_STATE_MAPPING",
+
     # Module metadata
     "__version__",
     "__author__",
@@ -136,76 +128,68 @@ __all__ = [
 ]
 
 # Module-level convenience functions
-def create_manufacturing_mcp(config: dict) -> AzureDevOpsAIManufacturingMCP:
+def create_multiplatform_mcp(config: dict) -> AzureDevOpsMultiPlatformMCP:
     """
-    Convenience function to create a configured Azure DevOps AI Manufacturing MCP instance
-    
+    Convenience function to create a configured Azure DevOps Multi-Platform MCP instance
+
     Args:
-        config: Configuration dictionary with Azure DevOps settings
-        
+        config: Configuration dictionary with Azure DevOps, GitHub, and GitLab settings
+
     Returns:
-        Configured AzureDevOpsAIManufacturingMCP instance
-        
+        Configured AzureDevOpsMultiPlatformMCP instance
+
     Example:
         >>> config = {
         ...     'azure_devops_organization_url': 'https://dev.azure.com/myorg',
-        ...     'personal_access_token': 'your-pat-token',
+        ...     'azure_devops_pat': 'your-azure-devops-token',
+        ...     'github_token': 'your-github-token',
+        ...     'gitlab_token': 'your-gitlab-token',
         ...     'default_project': 'MyProject'
         ... }
-        >>> mcp = create_manufacturing_mcp(config)
+        >>> mcp = create_multiplatform_mcp(config)
         >>> async with mcp:
         ...     result = await mcp.analyze_project_structure('myorg', 'MyProject')
     """
-    return AzureDevOpsAIManufacturingMCP(config)
+    return AzureDevOpsMultiPlatformMCP(config)
 
 
 def get_default_configuration() -> dict:
     """
-    Get default configuration template for Azure DevOps AI Manufacturing MCP
-    
+    Get default configuration template for Azure DevOps Multi-Platform MCP
+
     Returns:
         Dictionary with default configuration values and placeholders
-        
+
     Example:
         >>> default_config = get_default_configuration()
-        >>> default_config['personal_access_token'] = 'your-actual-token'
-        >>> mcp = create_manufacturing_mcp(default_config)
+        >>> default_config['azure_devops_pat'] = 'your-actual-token'
+        >>> mcp = create_multiplatform_mcp(default_config)
     """
     return {
         # Azure DevOps Configuration
         'azure_devops_organization_url': 'https://dev.azure.com/your-organization',
-        'personal_access_token': '${AZURE_DEVOPS_PAT}',  # Set from environment
-        'default_project': 'AI-Manufacturing',
+        'azure_devops_pat': '${AZURE_DEVOPS_PAT}',  # Set from environment
+        'default_project': 'YourProject',
         'rate_limit_rps': 20,
         'burst_capacity': 200,
-        
-        # Database Configuration  
+
+        # Multi-Platform Configuration
+        'github_token': '${GITHUB_TOKEN}',
+        'gitlab_token': '${GITLAB_TOKEN}',
+
+        # Database Configuration
         'config_storage': 'sqlite',
         'config_db_url': 'azure_devops_config.db',
         'config_encryption_key': '${CONFIG_ENCRYPTION_KEY}',
-        
+
         # Cache Configuration
         'redis_url': None,  # Optional Redis URL
         'cache_ttl_seconds': 3600,
         'persistent_cache': True,
-        
-        # Git Integration
-        'azure_repos_token': None,  # Usually same as main PAT
-        'github_token': '${GITHUB_TOKEN}',
-        'gitlab_token': '${GITLAB_TOKEN}',
-        'default_git_provider': 'azure_repos',
-        
-        # Manufacturing Configuration
-        'manufacturing_phases': DEFAULT_PHASES.copy(),
-        
-        # Quality Gates Configuration
-        'quality_gates': {
-            'code_coverage_threshold': 80,
-            'security_scan_required': True,
-            'performance_test_required': True,
-            'azure_pipelines_integration': True
-        },
-        
+
+        # State Mapping Configuration
+        'state_mapping': DEFAULT_STATE_MAPPING.copy(),
+
         # Monitoring Configuration
         'enable_metrics': True,
         'metrics_backend': 'prometheus',
@@ -243,29 +227,31 @@ _validate_dependencies()
 
 # Module docstring for help()
 __doc__ = f"""
-Azure DevOps AI Manufacturing MCP v{__version__}
+Azure DevOps Multi-Platform MCP v{__version__}
 
-This module provides comprehensive Azure DevOps integration for AI-driven software 
-manufacturing processes. It includes project analysis, work item management, 
-workflow automation, and multi-platform Git integration.
+This module provides comprehensive integration with Azure DevOps, GitHub, and GitLab
+for unified development workflow management. It includes project analysis, work item
+management, cross-platform synchronization, and multi-platform Git integration.
 
 Key Features:
 - Complete Azure DevOps project structure analysis
-- Manufacturing-optimized work item creation and management  
-- Intelligent workflow automation with Azure Boards
+- Flexible work item creation and management with custom field support
+- Cross-platform synchronization between Azure DevOps, GitHub, and GitLab
 - Multi-platform Git integration (Azure Repos, GitHub, GitLab)
 - High-performance caching and configuration persistence
 - Comprehensive monitoring and analytics
 
 Quick Start:
-    >>> from azure_devops_ai_manufacturing_mcp import create_manufacturing_mcp
-    >>> 
+    >>> from azure_devops_multiplatform_mcp import create_multiplatform_mcp
+    >>>
     >>> config = {{
     ...     'azure_devops_organization_url': 'https://dev.azure.com/myorg',
-    ...     'personal_access_token': 'your-pat-token'
+    ...     'azure_devops_pat': 'your-azure-devops-token',
+    ...     'github_token': 'your-github-token',
+    ...     'gitlab_token': 'your-gitlab-token'
     ... }}
-    >>> 
-    >>> async with create_manufacturing_mcp(config) as mcp:
+    >>>
+    >>> async with create_multiplatform_mcp(config) as mcp:
     ...     result = await mcp.analyze_project_structure('myorg', 'myproject')
     ...     print(f"Analysis completed: {{result.success}}")
 

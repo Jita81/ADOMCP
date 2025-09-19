@@ -1,26 +1,14 @@
 """
-Azure DevOps AI Manufacturing MCP - Data Types and Structures
+Azure DevOps Multi-Platform MCP - Data Types and Structures
 
-This module defines all data types, enums, and structures used for Azure DevOps
-AI manufacturing operations following the Standardized Modules Framework.
+This module defines all data types, enums, and structures used for Azure DevOps,
+GitHub, and GitLab integration operations following the Standardized Modules Framework.
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 from enum import Enum
-
-
-class ManufacturingPhase(Enum):
-    """Manufacturing phases for Azure DevOps workflow"""
-    ANALYSIS = "analysis"
-    PLANNING = "planning"
-    CODE_GENERATION = "code_generation"
-    CODE_REVIEW = "code_review"
-    TESTING = "testing"
-    INTEGRATION = "integration"
-    DEPLOYMENT = "deployment"
-    COMPLETION = "completion"
 
 
 class AzureDevOpsWorkItemType(Enum):
@@ -80,11 +68,11 @@ class AzureDevOpsProjectStructure:
 
 
 @dataclass
-class ManufacturingWorkItem:
-    """Manufacturing work item structure for Azure DevOps"""
+class WorkItemData:
+    """Generic work item data structure for multi-platform support"""
     organization: str
     project: str
-    work_item_type: AzureDevOpsWorkItemType
+    work_item_type: str  # Can be "User Story", "Bug", "Task", etc.
     title: str
     description: Optional[str] = None
     area_path: Optional[str] = None
@@ -93,65 +81,20 @@ class ManufacturingWorkItem:
     state: Optional[str] = None
     priority: Optional[int] = None
     tags: Optional[List[str]] = None
-    custom_fields: Optional[Dict[str, Any]] = None
-    manufacturing_metadata: Optional['ManufacturingMetadata'] = None
-    quality_requirements: Optional['QualityRequirements'] = None
-    artifact_links: Optional[List['ArtifactLink']] = None
+    fields: Optional[Dict[str, Any]] = None  # Flexible field mapping for custom fields
+    github_issue_data: Optional[Dict[str, Any]] = None  # GitHub-specific fields
+    gitlab_issue_data: Optional[Dict[str, Any]] = None  # GitLab-specific fields
 
 
 @dataclass
-class ManufacturingMetadata:
-    """AI manufacturing metadata structure for Azure DevOps"""
-    manufacturing_id: str
-    ai_generator: str
-    confidence_score: float
-    complexity_score: Optional[int] = None
-    estimated_duration_hours: Optional[int] = None
-    current_phase: ManufacturingPhase = ManufacturingPhase.ANALYSIS
-    progress_percentage: int = 0
-    quality_metrics: Optional[Dict[str, Any]] = None
-    manufacturing_history: Optional[List['ManufacturingEvent']] = None
-    azure_devops_work_item_id: Optional[int] = None
-
-
-@dataclass
-class ManufacturingProgress:
-    """Manufacturing progress update structure"""
-    current_phase: ManufacturingPhase
-    progress_percentage: int
-    quality_metrics: Optional[Dict[str, Any]] = None
-    phase_completion_time: Optional[datetime] = None
-    notes: Optional[str] = None
-
-
-@dataclass
-class ManufacturingEvent:
-    """Manufacturing event for history tracking"""
-    event_type: str
-    phase: ManufacturingPhase
-    timestamp: datetime
-    description: str
-    metadata: Optional[Dict[str, Any]] = None
-
-
-@dataclass
-class QualityRequirements:
-    """Quality requirements for manufacturing"""
-    code_coverage_threshold: Optional[float] = None
-    security_scan_required: bool = False
-    performance_test_required: bool = False
-    manual_review_required: bool = False
-    custom_quality_gates: Optional[List[str]] = None
-
-
-@dataclass
-class QualityGateResult:
-    """Quality gate validation result"""
-    gate_name: str
-    status: QualityGateStatus
-    score: Optional[float] = None
-    details: Optional[Dict[str, Any]] = None
-    validated_at: datetime = field(default_factory=datetime.now)
+class WorkItemUpdate:
+    """Work item update structure for multi-platform operations"""
+    work_item_id: int
+    organization: str
+    project: str
+    updates: Dict[str, Any]  # Field updates as key-value pairs
+    comment: Optional[str] = None
+    transition_state: Optional[str] = None  # New state to transition to
 
 
 @dataclass
@@ -354,8 +297,8 @@ class BuildDefinition:
 class TransitionResult:
     """Workflow transition result"""
     success: bool
-    from_phase: ManufacturingPhase
-    to_phase: ManufacturingPhase
+    from_state: str
+    to_state: str
     work_item_id: int
     board_column_updated: bool
     message: str
@@ -385,10 +328,10 @@ class HealthStatus:
 
 @dataclass
 class DashboardData:
-    """Manufacturing dashboard data"""
+    """Multi-platform dashboard data"""
     organization: str
     project: str
-    manufacturing_velocity: Dict[str, float]
+    work_item_velocity: Dict[str, float]
     active_work_items: int
     completed_work_items: int
     quality_metrics: Dict[str, Any]
@@ -397,14 +340,11 @@ class DashboardData:
     generated_at: datetime = field(default_factory=datetime.now)
 
 
-# Default manufacturing phase mapping for Azure DevOps board states
-DEFAULT_PHASES = {
-    'analysis': 'New',
-    'planning': 'Approved',
-    'code_generation': 'Active',
-    'code_review': 'Resolved',
+# Default state mapping for Azure DevOps board states
+DEFAULT_STATE_MAPPING = {
+    'new': 'New',
+    'active': 'Active',
+    'resolved': 'Resolved',
     'testing': 'Testing',
-    'integration': 'Build',
-    'deployment': 'Deploy',
-    'completion': 'Closed'
+    'closed': 'Closed'
 }

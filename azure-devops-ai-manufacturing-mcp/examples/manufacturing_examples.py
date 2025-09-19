@@ -1,8 +1,8 @@
 """
-Azure DevOps AI Manufacturing MCP - Complete Usage Examples
+Azure DevOps Multi-Platform MCP - Complete Usage Examples
 
-This module provides comprehensive examples of using the Azure DevOps AI Manufacturing MCP
-for various manufacturing scenarios and workflows.
+This module provides comprehensive examples of using the Azure DevOps Multi-Platform MCP
+for various cross-platform development scenarios and workflows.
 """
 
 import asyncio
@@ -14,13 +14,11 @@ from typing import List
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from azure_devops_ai_manufacturing_mcp import (
-    create_manufacturing_mcp,
+from azure_devops_multiplatform_mcp import (
+    create_multiplatform_mcp,
     get_default_configuration,
-    ManufacturingWorkItem,
-    ManufacturingMetadata,
-    ManufacturingProgress,
-    ManufacturingPhase,
+    WorkItemData,
+    WorkItemUpdate,
     AzureDevOpsWorkItemType,
     DevelopmentArtifacts,
     CommitArtifact,
@@ -34,17 +32,19 @@ async def basic_usage_example():
     Basic usage example showing project analysis and work item creation
     """
     print("=== Basic Usage Example ===")
-    
+
     # Get default configuration and customize
     config = get_default_configuration()
     config.update({
         'azure_devops_organization_url': 'https://dev.azure.com/myorg',
-        'personal_access_token': os.getenv('AZURE_DEVOPS_PAT', 'your-pat-token'),
-        'default_project': 'AI-Manufacturing-Demo'
+        'azure_devops_pat': os.getenv('AZURE_DEVOPS_PAT', 'your-azure-devops-token'),
+        'github_token': os.getenv('GITHUB_TOKEN', 'your-github-token'),
+        'gitlab_token': os.getenv('GITLAB_TOKEN', 'your-gitlab-token'),
+        'default_project': 'MultiPlatform-Demo'
     })
     
     try:
-        async with create_manufacturing_mcp(config) as mcp:
+        async with create_multiplatform_mcp(config) as mcp:
             # 1. Analyze project structure
             print("Analyzing project structure...")
             analysis_result = await mcp.analyze_project_structure('myorg', 'AI-Manufacturing-Demo')
@@ -62,7 +62,7 @@ async def basic_usage_example():
             
             # 2. Create a manufacturing work item
             print("\nCreating manufacturing work item...")
-            work_item = ManufacturingWorkItem(
+            work_item = WorkItemData(
                 organization='myorg',
                 project='AI-Manufacturing-Demo',
                 work_item_type=AzureDevOpsWorkItemType.USER_STORY,
@@ -71,7 +71,7 @@ async def basic_usage_example():
                 area_path='AI-Manufacturing-Demo\\Security',
                 iteration_path='AI-Manufacturing-Demo\\Sprint 1',
                 tags=['ai-generated', 'authentication', 'security', 'high-priority'],
-                manufacturing_metadata=ManufacturingMetadata(
+                manufacturing_metadata=# No direct replacement needed - using WorkItemData.fields instead(
                     manufacturing_id='ai_auth_system_001',
                     ai_generator='gpt-4-turbo-code-specialist',
                     confidence_score=0.94,
@@ -119,7 +119,7 @@ async def bulk_manufacturing_example():
     })
     
     try:
-        async with create_manufacturing_mcp(config) as mcp:
+        async with create_multiplatform_mcp(config) as mcp:
             # Create multiple work items for a complete application
             work_items = []
             
@@ -164,7 +164,7 @@ async def bulk_manufacturing_example():
             
             # Create work items
             for i, component in enumerate(components):
-                work_item = ManufacturingWorkItem(
+                work_item = WorkItemData(
                     organization='myorg',
                     project='AI-Manufacturing-Demo',
                     work_item_type=AzureDevOpsWorkItemType.USER_STORY,
@@ -173,7 +173,7 @@ async def bulk_manufacturing_example():
                     area_path=f"AI-Manufacturing-Demo\\{component['area']}",
                     iteration_path='AI-Manufacturing-Demo\\Sprint 1',
                     tags=['ai-generated', 'bulk-manufacturing', component['area'].lower()],
-                    manufacturing_metadata=ManufacturingMetadata(
+                    manufacturing_metadata=# No direct replacement needed - using WorkItemData.fields instead(
                         manufacturing_id=f'ai_component_{i+1:03d}',
                         ai_generator='gpt-4-turbo-code-specialist',
                         confidence_score=component['confidence'],
@@ -250,15 +250,15 @@ async def git_integration_example():
     })
     
     try:
-        async with create_manufacturing_mcp(config) as mcp:
+        async with create_multiplatform_mcp(config) as mcp:
             # First create a work item to attach artifacts to
-            work_item = ManufacturingWorkItem(
+            work_item = WorkItemData(
                 organization='myorg',
                 project='AI-Manufacturing-Demo',
                 work_item_type=AzureDevOpsWorkItemType.FEATURE,
                 title='Multi-Platform Git Integration Feature',
                 description='Demonstrate Git integration across Azure Repos, GitHub, and GitLab',
-                manufacturing_metadata=ManufacturingMetadata(
+                manufacturing_metadata=# No direct replacement needed - using WorkItemData.fields instead(
                     manufacturing_id='git_integration_001',
                     ai_generator='gpt-4-turbo',
                     confidence_score=0.92,
@@ -413,7 +413,7 @@ async def monitoring_and_dashboard_example():
     })
     
     try:
-        async with create_manufacturing_mcp(config) as mcp:
+        async with create_multiplatform_mcp(config) as mcp:
             # Generate manufacturing dashboard
             print("Generating manufacturing dashboard...")
             dashboard = await mcp.generate_manufacturing_dashboard('myorg', 'AI-Manufacturing-Demo')
@@ -490,7 +490,7 @@ async def complete_manufacturing_workflow_example():
     })
     
     try:
-        async with create_manufacturing_mcp(config) as mcp:
+        async with create_multiplatform_mcp(config) as mcp:
             print("🏭 Starting complete AI manufacturing workflow...")
             
             # Step 1: Project Analysis
@@ -505,7 +505,7 @@ async def complete_manufacturing_workflow_example():
             
             # Step 2: Create Manufacturing Epic
             print("\n2️⃣ Creating manufacturing epic...")
-            epic = ManufacturingWorkItem(
+            epic = WorkItemData(
                 organization='myorg',
                 project='AI-Manufacturing-Demo',
                 work_item_type=AzureDevOpsWorkItemType.EPIC,
@@ -514,7 +514,7 @@ async def complete_manufacturing_workflow_example():
                 area_path='AI-Manufacturing-Demo\\E-Commerce',
                 iteration_path='AI-Manufacturing-Demo\\Release 1',
                 tags=['ai-generated', 'epic', 'e-commerce'],
-                manufacturing_metadata=ManufacturingMetadata(
+                manufacturing_metadata=# No direct replacement needed - using WorkItemData.fields instead(
                     manufacturing_id='epic_ecommerce_001',
                     ai_generator='gpt-4-turbo-architecture',
                     confidence_score=0.92,
@@ -562,7 +562,7 @@ async def complete_manufacturing_workflow_example():
             
             feature_work_items = []
             for i, feature in enumerate(features):
-                work_item = ManufacturingWorkItem(
+                work_item = WorkItemData(
                     organization='myorg',
                     project='AI-Manufacturing-Demo',
                     work_item_type=AzureDevOpsWorkItemType.FEATURE,
@@ -571,7 +571,7 @@ async def complete_manufacturing_workflow_example():
                     area_path='AI-Manufacturing-Demo\\E-Commerce',
                     iteration_path='AI-Manufacturing-Demo\\Sprint 1',
                     tags=['ai-generated', 'feature', 'e-commerce'],
-                    manufacturing_metadata=ManufacturingMetadata(
+                    manufacturing_metadata=# No direct replacement needed - using WorkItemData.fields instead(
                         manufacturing_id=f'feature_ecom_{i+1:03d}',
                         ai_generator='gpt-4-turbo-feature-specialist',
                         confidence_score=feature['confidence'],

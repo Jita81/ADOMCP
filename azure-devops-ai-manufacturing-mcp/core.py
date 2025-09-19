@@ -1,7 +1,7 @@
 """
-Azure DevOps AI Manufacturing MCP - Core Implementation
+Azure DevOps Multi-Platform MCP - Core Implementation
 
-This module implements the main Azure DevOps AI Manufacturing MCP functionality
+This module implements the main Azure DevOps Multi-Platform MCP functionality
 following the Standardized Modules Framework pattern.
 """
 
@@ -13,12 +13,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from urllib.parse import urlparse
 
-from .interface import AzureDevOpsAIManufacturingInterface
+from .interface import AzureDevOpsMultiPlatformInterface
 from .types import (
-    OperationResult, ManufacturingWorkItem, ManufacturingProgress, 
-    ManufacturingPhase, DevelopmentArtifacts, AzureDevOpsProjectStructure,
-    TransitionResult, ArtifactResult, QualityGateResult, HealthStatus, 
-    DashboardData, DEFAULT_PHASES, WorkItemTypeDefinition, FieldDefinition,
+    OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
+    AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus,
+    DashboardData, DEFAULT_STATE_MAPPING, WorkItemTypeDefinition, FieldDefinition,
     BoardConfiguration, RepositoryInfo, BuildDefinition, TeamConfiguration,
     AreaPath, IterationPath
 )
@@ -28,24 +27,26 @@ from .artifact_manager import ArtifactManager
 from .cache_manager import CacheManager
 
 
-class AzureDevOpsAIManufacturingMCP(AzureDevOpsAIManufacturingInterface):
+class AzureDevOpsMultiPlatformMCP(AzureDevOpsMultiPlatformInterface):
     """
     Complete Azure DevOps project structure analysis with persistent configuration
-    
-    This implementation provides comprehensive Azure DevOps integration for AI manufacturing
-    processes, including project analysis, work item management, workflow automation,
-    and multi-platform Git integration.
+
+    This implementation provides comprehensive multi-platform integration for development
+    workflows, including project analysis, work item management, workflow automation,
+    and cross-platform Git integration.
     """
-    
+
     def __init__(self, config: Dict[str, Any]):
-        """Initialize Azure DevOps AI Manufacturing MCP with enhanced configuration management"""
+        """Initialize Azure DevOps Multi-Platform MCP with enhanced configuration management"""
         self.config = config
         self.organization_url = config['azure_devops_organization_url']
-        self.personal_access_token = config['personal_access_token']
+        self.azure_devops_pat = config.get('azure_devops_pat', config.get('personal_access_token'))
+        self.github_token = config.get('github_token')
+        self.gitlab_token = config.get('gitlab_token')
         
         # Initialize Azure DevOps REST API client
         self.headers = {
-            'Authorization': f'Basic {self._encode_pat(self.personal_access_token)}',
+            'Authorization': f'Basic {self._encode_pat(self.azure_devops_pat)}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         }

@@ -1,26 +1,25 @@
 """
-Azure DevOps AI Manufacturing MCP - Interface Contracts
+Azure DevOps Multi-Platform MCP - Interface Contracts
 
-This module defines the complete interface contracts for Azure DevOps AI manufacturing
-operations following the Standardized Modules Framework.
+This module defines the complete interface contracts for Azure DevOps, GitHub, and GitLab
+integration operations following the Standardized Modules Framework.
 """
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 from .types import (
-    OperationResult, ManufacturingWorkItem, ManufacturingProgress, 
-    ManufacturingPhase, DevelopmentArtifacts, AzureDevOpsProjectStructure,
-    TransitionResult, ArtifactResult, QualityGateResult, HealthStatus, DashboardData
+    OperationResult, WorkItemData, WorkItemUpdate, DevelopmentArtifacts,
+    AzureDevOpsProjectStructure, TransitionResult, ArtifactResult, HealthStatus, DashboardData
 )
 
 
-class AzureDevOpsAIManufacturingInterface(ABC):
+class AzureDevOpsMultiPlatformInterface(ABC):
     """
-    Complete interface contract for Azure DevOps AI Manufacturing MCP module.
-    
-    This interface defines all operations required for AI-driven software manufacturing
-    processes integrated with Azure DevOps, including project analysis, work item
-    management, workflow automation, and artifact tracking.
+    Complete interface contract for Azure DevOps Multi-Platform MCP module.
+
+    This interface defines all operations required for multi-platform development
+    workflows integrated with Azure DevOps, GitHub, and GitLab, including work item
+    management, cross-platform synchronization, and artifact tracking.
     """
     
     # Core Project Analysis Operations
@@ -55,54 +54,53 @@ class AzureDevOpsAIManufacturingInterface(ABC):
     
     # Work Item Management Operations
     @abstractmethod
-    async def create_manufacturing_work_item(self, work_item: ManufacturingWorkItem) -> OperationResult:
+    async def create_work_item(self, work_item_data: WorkItemData) -> OperationResult:
         """
-        Create manufacturing-optimized Azure DevOps work item with AI metadata.
-        
+        Create work item with flexible field mapping for multi-platform support.
+
         Args:
-            work_item: ManufacturingWorkItem with all required fields
-            
+            work_item_data: WorkItemData with all required fields
+
         Returns:
             OperationResult with created work item ID and details
         """
         pass
-    
+
     @abstractmethod
-    async def bulk_create_manufacturing_work_items(self, work_items: List[ManufacturingWorkItem]) -> OperationResult:
+    async def bulk_create_work_items(self, work_items: List[WorkItemData]) -> OperationResult:
         """
-        Create multiple manufacturing work items in batch for performance.
-        
+        Create multiple work items in batch for performance.
+
         Args:
-            work_items: List of ManufacturingWorkItem objects
-            
+            work_items: List of WorkItemData objects
+
         Returns:
             OperationResult with batch creation results
         """
         pass
-    
+
     @abstractmethod
-    async def update_manufacturing_progress(self, work_item_id: int, progress_data: ManufacturingProgress) -> OperationResult:
+    async def update_work_item(self, work_item_update: WorkItemUpdate) -> OperationResult:
         """
-        Update manufacturing progress and automatically transition work item states.
-        
+        Update work item fields and optionally transition state.
+
         Args:
-            work_item_id: Azure DevOps work item ID
-            progress_data: ManufacturingProgress with current phase and metrics
-            
+            work_item_update: WorkItemUpdate with field updates and optional state transition
+
         Returns:
             OperationResult with update confirmation
         """
         pass
-    
+
     @abstractmethod
-    async def transition_manufacturing_workflow(self, work_item_id: int, target_phase: ManufacturingPhase) -> TransitionResult:
+    async def transition_work_item_state(self, work_item_id: int, target_state: str) -> TransitionResult:
         """
-        Transition work item through Azure Boards workflow based on manufacturing phase.
-        
+        Transition work item to a new state in the workflow.
+
         Args:
-            work_item_id: Azure DevOps work item ID
-            target_phase: Target ManufacturingPhase
-            
+            work_item_id: Work item ID
+            target_state: Target state name
+
         Returns:
             TransitionResult with transition details
         """
@@ -137,18 +135,33 @@ class AzureDevOpsAIManufacturingInterface(ABC):
         """
         pass
     
-    # Quality and Validation Operations
+    # Cross-Platform Operations
     @abstractmethod
-    async def validate_quality_gates(self, work_item_id: int, target_phase: ManufacturingPhase) -> QualityGateResult:
+    async def sync_github_issues(self, owner: str, repo: str, work_item_id: Optional[int] = None) -> OperationResult:
         """
-        Validate quality gates before manufacturing phase transition.
-        
+        Synchronize GitHub issues with Azure DevOps work items.
+
         Args:
-            work_item_id: Azure DevOps work item ID
-            target_phase: Target ManufacturingPhase for validation
-            
+            owner: GitHub repository owner
+            repo: GitHub repository name
+            work_item_id: Optional Azure DevOps work item ID for linking
+
         Returns:
-            QualityGateResult with validation status
+            OperationResult with sync status
+        """
+        pass
+
+    @abstractmethod
+    async def sync_gitlab_issues(self, project_id: str, work_item_id: Optional[int] = None) -> OperationResult:
+        """
+        Synchronize GitLab issues with Azure DevOps work items.
+
+        Args:
+            project_id: GitLab project ID
+            work_item_id: Optional Azure DevOps work item ID for linking
+
+        Returns:
+            OperationResult with sync status
         """
         pass
     
@@ -195,41 +208,41 @@ class AzureDevOpsAIManufacturingInterface(ABC):
         pass
     
     @abstractmethod
-    async def generate_manufacturing_dashboard(self, organization: str, project: str) -> DashboardData:
+    async def generate_dashboard_data(self, organization: str, project: str) -> DashboardData:
         """
-        Generate real-time manufacturing dashboard data.
-        
+        Generate real-time dashboard data for multi-platform workflows.
+
         Args:
-            organization: Azure DevOps organization name
-            project: Azure DevOps project name
-            
+            organization: Organization name
+            project: Project name
+
         Returns:
-            DashboardData with manufacturing metrics and insights
+            DashboardData with metrics and insights
         """
         pass
-    
+
     # Batch Operations for Performance
     @abstractmethod
-    async def bulk_update_manufacturing_progress(self, updates: Dict[int, ManufacturingProgress]) -> OperationResult:
+    async def bulk_update_work_items(self, updates: List[WorkItemUpdate]) -> OperationResult:
         """
-        Update manufacturing progress for multiple work items in batch.
-        
+        Update multiple work items in batch for performance.
+
         Args:
-            updates: Dictionary mapping work item IDs to ManufacturingProgress
-            
+            updates: List of WorkItemUpdate objects
+
         Returns:
             OperationResult with batch update results
         """
         pass
-    
+
     @abstractmethod
-    async def bulk_transition_workflows(self, transitions: Dict[int, ManufacturingPhase]) -> List[TransitionResult]:
+    async def bulk_transition_work_items(self, transitions: Dict[int, str]) -> List[TransitionResult]:
         """
-        Transition multiple work items through manufacturing workflows in batch.
-        
+        Transition multiple work items to new states in batch.
+
         Args:
-            transitions: Dictionary mapping work item IDs to target ManufacturingPhase
-            
+            transitions: Dictionary mapping work item IDs to target states
+
         Returns:
             List of TransitionResult for each transition
         """
@@ -237,87 +250,82 @@ class AzureDevOpsAIManufacturingInterface(ABC):
 
 
 class ConfigurationManagerInterface(ABC):
-    """Interface for Azure DevOps configuration persistence"""
-    
+    """Interface for multi-platform configuration persistence"""
+
     @abstractmethod
-    async def store_project_configuration(self, organization: str, project: str, 
+    async def store_project_configuration(self, organization: str, project: str,
                                         configuration: AzureDevOpsProjectStructure) -> bool:
-        """Store Azure DevOps project configuration with versioning"""
+        """Store project configuration with versioning"""
         pass
-    
+
     @abstractmethod
-    async def get_project_configuration(self, organization: str, project: str, 
+    async def get_project_configuration(self, organization: str, project: str,
                                       version: Optional[str] = None) -> Optional[AzureDevOpsProjectStructure]:
-        """Retrieve Azure DevOps project configuration with optional versioning"""
+        """Retrieve project configuration with optional versioning"""
         pass
-    
+
     @abstractmethod
     async def schedule_configuration_validation(self, organization: str, project: str, schedule: str) -> bool:
-        """Schedule daily configuration validation job"""
+        """Schedule configuration validation job"""
         pass
 
 
 class WorkflowManagerInterface(ABC):
-    """Interface for Azure Boards workflow automation"""
-    
+    """Interface for workflow automation"""
+
     @abstractmethod
-    async def execute_phase_transition(self, devops_client: Any, organization: str, project: str,
-                                     work_item_id: int, target_phase: ManufacturingPhase, 
+    async def execute_state_transition(self, organization: str, project: str,
+                                     work_item_id: int, target_state: str,
                                      context: Dict[str, Any]) -> TransitionResult:
-        """Execute manufacturing phase transition in Azure Boards"""
+        """Execute state transition in workflow"""
         pass
-    
-    @abstractmethod
-    async def validate_quality_gates(self, work_item_id: int, target_phase: ManufacturingPhase) -> QualityGateResult:
-        """Validate quality gates before phase transition"""
-        pass
-    
+
     @abstractmethod
     async def get_board_configuration(self, organization: str, project: str, team: str) -> Dict[str, Any]:
-        """Retrieve Azure Boards configuration"""
+        """Retrieve board configuration"""
         pass
 
 
 class ArtifactManagerInterface(ABC):
     """Interface for multi-platform Git integration"""
-    
+
     @abstractmethod
-    async def attach_commit_artifacts(self, organization: str, project: str, work_item_id: int, 
+    async def attach_commit_artifacts(self, organization: str, project: str, work_item_id: int,
                                     repository_url: str, commit_hashes: List[str]) -> ArtifactResult:
-        """Attach commit artifacts to Azure DevOps work items"""
+        """Attach commit artifacts to work items"""
         pass
-    
+
     @abstractmethod
-    async def attach_pull_request_artifacts(self, organization: str, project: str, 
+    async def attach_pull_request_artifacts(self, organization: str, project: str,
                                           work_item_id: int, pr_url: str) -> ArtifactResult:
         """Attach pull/merge request artifacts"""
         pass
-    
+
     @abstractmethod
-    async def monitor_repository_activity(self, repository_url: str, 
-                                        work_item_patterns: List[str]) -> None:
-        """Monitor repository for manufacturing-related activity"""
+    async def sync_repository_activity(self, repository_url: str,
+                                     work_item_patterns: List[str]) -> None:
+        """Monitor repository for development activity"""
         pass
 
 
 class CacheManagerInterface(ABC):
     """Interface for high-performance caching"""
-    
+
     @abstractmethod
     async def get_project_structure(self, organization: str, project: str) -> Optional[AzureDevOpsProjectStructure]:
-        """Multi-tier cache lookup for Azure DevOps project structure"""
+        """Multi-tier cache lookup for project structure"""
         pass
-    
+
     @abstractmethod
     async def cache_work_item_types(self, organization: str, project: str, work_item_types: List[Dict[str, Any]]) -> bool:
         """Cache work item type definitions with field schemas"""
         pass
-    
+
     @abstractmethod
-    async def warm_cache_for_manufacturing(self, organizations: List[str], projects: List[str]) -> bool:
-        """Pre-warm cache for manufacturing operations"""
+    async def warm_cache(self, organizations: List[str], projects: List[str]) -> bool:
+        """Pre-warm cache for operations"""
         pass
-    
+
     @abstractmethod
     async def invalidate_cache(self, cache_key: str) -> bool:
         """Invalidate specific cache entry"""

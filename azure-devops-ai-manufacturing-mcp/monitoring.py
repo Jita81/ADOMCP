@@ -1,7 +1,7 @@
 """
-Azure DevOps AI Manufacturing MCP - Performance Monitoring
+Azure DevOps Multi-Platform MCP - Performance Monitoring
 
-This module provides comprehensive manufacturing monitoring for Azure DevOps
+This module provides comprehensive monitoring for Azure DevOps, GitHub, and GitLab
 with performance metrics, system health, and business insights.
 """
 
@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
 from .types import (
-    ManufacturingPhase, HealthStatus, DashboardData, OperationResult
+    HealthStatus, DashboardData, OperationResult
 )
 
 
@@ -26,11 +26,11 @@ class PerformanceMetric:
 
 
 @dataclass
-class ManufacturingMetrics:
-    """Manufacturing-specific metrics"""
+class WorkflowMetrics:
+    """Multi-platform workflow metrics"""
     organization: str
     project: str
-    phase: ManufacturingPhase
+    phase: str
     duration_seconds: float
     success: bool
     work_item_id: int
@@ -38,16 +38,16 @@ class ManufacturingMetrics:
     metadata: Optional[Dict[str, Any]] = None
 
 
-class AzureDevOpsManufacturingMonitor:
+class AzureDevOpsMultiPlatformMonitor:
     """
-    Comprehensive manufacturing monitoring for Azure DevOps
-    
+    Comprehensive multi-platform monitoring for Azure DevOps, GitHub, and GitLab
+
     Monitoring Categories:
     1. Performance Metrics (response times, throughput, error rates)
-    2. Manufacturing Metrics (cycle times, quality scores, bottlenecks)
-    3. System Health (Azure DevOps API connectivity, cache performance, database health)
-    4. Business Metrics (manufacturing velocity, success rates)
-    5. Azure DevOps Analytics integration for advanced insights
+    2. Workflow Metrics (cycle times, quality scores, bottlenecks)
+    3. System Health (API connectivity, cache performance, database health)
+    4. Business Metrics (work item velocity, success rates)
+    5. Multi-platform Analytics integration for advanced insights
     """
     
     def __init__(self, metrics_backend: str = 'prometheus'):

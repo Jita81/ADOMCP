@@ -1,12 +1,12 @@
 """
-Setup configuration for Azure DevOps AI Manufacturing MCP
+Setup configuration for Azure DevOps Multi-Platform MCP
 """
 
 from setuptools import setup, find_packages
 import os
 
 # Read the README file
-with open("docs/README.md", "r", encoding="utf-8") as fh:
+with open("../README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 # Read the requirements file
@@ -16,7 +16,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 # Core requirements (non-optional)
 core_requirements = [
     "aiohttp>=3.8.0,<4.0.0",
-    "aiosqlite>=0.17.0,<1.0.0", 
+    "aiosqlite>=0.17.0,<1.0.0",
     "cryptography>=3.4.8,<5.0.0",
     "python-dateutil>=2.8.0,<3.0.0"
 ]
@@ -59,14 +59,14 @@ for reqs in optional_requirements.values():
 optional_requirements["all"] = all_optional
 
 setup(
-    name="azure-devops-ai-manufacturing-mcp",
+    name="azure-devops-multiplatform-mcp",
     version="1.0.0",
-    author="Azure DevOps AI Manufacturing Team",
-    author_email="ai-manufacturing@company.com",
-    description="Comprehensive Azure DevOps MCP module for AI-driven software manufacturing processes",
+    author="Azure DevOps Multi-Platform Team",
+    author_email="multiplatform@company.com",
+    description="Comprehensive MCP module for Azure DevOps, GitHub, and GitLab integration",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/your-org/azure-devops-ai-manufacturing-mcp",
+    url="https://github.com/Jita81/ADOMCP",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -88,12 +88,12 @@ setup(
     extras_require=optional_requirements,
     entry_points={
         "console_scripts": [
-            "azure-devops-manufacturing=azure_devops_ai_manufacturing_mcp.cli:main",
+            "azure-devops-multiplatform=azure_devops_multiplatform_mcp.cli:main",
         ],
     },
     include_package_data=True,
     package_data={
-        "azure_devops_ai_manufacturing_mcp": [
+        "azure_devops_multiplatform_mcp": [
             "docs/*.md",
             "examples/*.py",
             "tests/*.py",
@@ -101,10 +101,10 @@ setup(
         ],
     },
     project_urls={
-        "Bug Reports": "https://github.com/your-org/azure-devops-ai-manufacturing-mcp/issues",
-        "Source": "https://github.com/your-org/azure-devops-ai-manufacturing-mcp",
-        "Documentation": "https://azure-devops-ai-manufacturing-mcp.readthedocs.io/",
+        "Bug Reports": "https://github.com/Jita81/ADOMCP/issues",
+        "Source": "https://github.com/Jita81/ADOMCP",
+        "Documentation": "https://github.com/Jita81/ADOMCP/tree/main/azure-devops-ai-manufacturing-mcp/docs",
     },
-    keywords="azure-devops ai manufacturing mcp automation workflow git integration",
+    keywords="azure-devops github gitlab mcp automation workflow git integration multiplatform",
     zip_safe=False,
 )
