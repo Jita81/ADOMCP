@@ -358,7 +358,29 @@ async def mcp_post(request: Request):
         request_id = body.get("id")
         
         # Handle different MCP methods
-        if method == "tools/list":
+        if method == "initialize":
+            # Handle MCP initialization handshake
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {},
+                        "roots": {
+                            "listChanged": True
+                        },
+                        "sampling": {}
+                    },
+                    "serverInfo": {
+                        "name": "ADOMCP",
+                        "version": "1.0.0"
+                    }
+                },
+                "id": request_id
+            }
+        elif method == "tools/list":
             return {
                 "jsonrpc": "2.0",
                 "result": {
@@ -388,9 +410,9 @@ async def mcp_post(request: Request):
                         },
                         {
                             "name": "github_integration",
-                            "description": "GitHub repository integration",
+                            "description": "GitHub repository integration", 
                             "inputSchema": {
-                                "type": "object", 
+                                "type": "object",
                                 "properties": {
                                     "action": {"type": "string"},
                                     "repository": {"type": "string"}
@@ -415,8 +437,14 @@ async def mcp_post(request: Request):
                         }
                     ]
                 },
-                "id": request_id
-            }
+                 "id": request_id
+             }
+        elif method == "initialized":
+            # Handle MCP initialized notification (no response needed)
+            return {"jsonrpc": "2.0", "result": None, "id": request_id}
+        elif method == "notifications/initialized":
+            # Alternative initialized notification format
+            return {"jsonrpc": "2.0", "result": None, "id": request_id}
         else:
             raise HTTPException(status_code=400, detail=f"Unknown method: {method}")
             
