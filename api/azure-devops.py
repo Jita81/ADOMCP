@@ -1,5 +1,5 @@
 """
-Real Azure DevOps API integration endpoint
+Real Azure DevOps API integration endpoint with security enhancements
 """
 
 import json
@@ -7,19 +7,74 @@ import base64
 import urllib.request
 import urllib.parse
 import urllib.error
+import sys
+import os
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 
+# Add security module to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from security import SecurityValidator, check_rate_limit, get_security_headers, get_cors_headers
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        """Handle Azure DevOps API operations"""
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
+        """Handle Azure DevOps API operations with security"""
+        # Initialize security validator
+        validator = SecurityValidator()
+        correlation_id = validator.generate_correlation_id()
+        
+        # Add security headers
+        for header, value in get_security_headers().items():
+            self.send_header(header, value)
         
         try:
+            content_length = int(self.headers['Content-Length'])
+            
+            # Rate limiting check
+            client_ip = self.client_address[0]
+            user_agent = self.headers.get('User-Agent', '')
+            
+            rate_ok, rate_info = check_rate_limit(client_ip, self.path, user_agent, content_length)
+            if not rate_ok:
+                self.send_response(429)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Retry-After', str(rate_info.get('retry_after', 60)))
+                self.send_header('X-Correlation-ID', correlation_id)
+                self.end_headers()
+                self.wfile.write(json.dumps(rate_info).encode())
+                return
+            
+            # Validate request size
+            size_ok, size_error = validator.validate_request_size(content_length)
+            if not size_ok:
+                self.send_response(413)
+                self.send_header('Content-type', 'application/json') 
+                self.send_header('X-Correlation-ID', correlation_id)
+                self.end_headers()
+                response = {"error": size_error, "correlation_id": correlation_id}
+                self.wfile.write(json.dumps(response).encode())
+                return
+            
+            post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
+            
             action = data.get('action')
             config = data.get('config', {})
+            
+            # Validate Azure DevOps configuration
+            config_valid, config_error = validator.validate_azure_devops_config(config)
+            if not config_valid:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('X-Correlation-ID', correlation_id)
+                self.end_headers()
+                response = {
+                    "error": "Invalid configuration",
+                    "details": config_error,
+                    "correlation_id": correlation_id
+                }
+                self.wfile.write(json.dumps(response).encode())
+                return
             
             # Required configuration
             organization_url = config.get('organization_url')
@@ -73,32 +128,35 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps(response).encode())
                 return
             
+            # Add correlation ID to successful responses
+            if 'correlation_id' not in result:
+                result['correlation_id'] = correlation_id
+            
             self.send_response(200 if result.get('success') else 500)
             self.send_header('Content-type', 'application/json')
+            self.send_header('X-Correlation-ID', correlation_id)
             self.end_headers()
             self.wfile.write(json.dumps(result).encode())
             return
             
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             self.send_response(400)
             self.send_header('Content-type', 'application/json')
+            self.send_header('X-Correlation-ID', correlation_id)
             self.end_headers()
             
-            response = {
-                "error": "Invalid JSON in request body"
-            }
-            self.wfile.write(json.dumps(response).encode())
+            safe_response = validator.create_safe_error_response(e, correlation_id, "JSON parsing")
+            safe_response["error"] = "Invalid JSON in request body"
+            self.wfile.write(json.dumps(safe_response).encode())
             return
         except Exception as e:
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
+            self.send_header('X-Correlation-ID', correlation_id)
             self.end_headers()
             
-            response = {
-                "error": f"Internal server error: {str(e)}",
-                "timestamp": datetime.now().isoformat()
-            }
-            self.wfile.write(json.dumps(response).encode())
+            safe_response = validator.create_safe_error_response(e, correlation_id, "Azure DevOps API")
+            self.wfile.write(json.dumps(safe_response).encode())
             return
     
     def _encode_pat(self, pat_token):
