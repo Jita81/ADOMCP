@@ -33,7 +33,8 @@ async def api_health():
     """API Health check"""
     return await health_check()
 
-# For Vercel
-def handler(event, context):
-    import uvicorn
-    return uvicorn.run(app, host="0.0.0.0", port=8000)
+# For Vercel deployment
+from mangum import Mangum
+
+# Create the handler for Vercel
+handler = Mangum(app)

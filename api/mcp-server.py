@@ -15,17 +15,7 @@ from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 import logging
 
-# MCP imports
-try:
-    from mcp import McpServer, Tool, Resource
-    from mcp.types import JSONRPCRequest, JSONRPCResponse
-except ImportError:
-    # Fallback if MCP package is not available
-    McpServer = None
-    Tool = None
-    Resource = None
-
-# Supabase integration
+# Supabase integration (optional for now)
 try:
     from supabase import create_client, Client
 except ImportError:
@@ -650,6 +640,7 @@ async def startup_event():
             logger.error(f"Startup error: {e}")
 
 # For Vercel deployment
-def handler(event, context):
-    import uvicorn
-    return uvicorn.run(app, host="0.0.0.0", port=8000)
+from mangum import Mangum
+
+# Create the handler for Vercel
+handler = Mangum(app)
