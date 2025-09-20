@@ -3,15 +3,16 @@ API capabilities endpoint for Vercel
 """
 
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler
+import json
 
-def handler(request):
-    """Simple Vercel handler for capabilities endpoint"""
-    return {
-        "statusCode": 200,
-        "headers": {
-            "Content-Type": "application/json"
-        },
-        "body": {
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {
             "tools": [
                 {
                     "name": "create_work_item",
@@ -85,4 +86,6 @@ def handler(request):
             "timestamp": datetime.now().isoformat(),
             "mcp_protocol": "JSON-RPC 2.0"
         }
-    }
+        
+        self.wfile.write(json.dumps(response).encode())
+        return
