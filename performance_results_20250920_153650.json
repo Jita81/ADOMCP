@@ -1,0 +1,162 @@
+{
+  "summary": {
+    "timestamp": "2025-09-20T15:36:50.092355",
+    "total_tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "success_rate": 100.0,
+    "total_duration": 65.31289005279541,
+    "mcp_server_url": "https://adomcp.vercel.app",
+    "performance_summary": {
+      "total_requests": 124,
+      "successful_requests": 124,
+      "request_success_rate": 100.0,
+      "avg_response_time": 0.25921461274546964,
+      "median_response_time": 0.2399909496307373,
+      "min_response_time": 0.19780993461608887,
+      "max_response_time": 0.5637609958648682,
+      "p95_response_time": 0.3971606492996216
+    },
+    "failed_tests": [],
+    "passed_tests": [
+      {
+        "name": "Response Time Analysis",
+        "duration": 14.15819001197815,
+        "message": "Avg: 0.25s, P95: 0.35s, Success: 100.0%"
+      },
+      {
+        "name": "Concurrent Request Handling",
+        "duration": 5.113222122192383,
+        "message": "Max concurrency: 10, Success: 100.0%"
+      },
+      {
+        "name": "Load Sustainability",
+        "duration": 30.202974796295166,
+        "message": "RPS: 2.0, Success: 100.0%, Avg: 0.25s"
+      },
+      {
+        "name": "Azure DevOps API Performance",
+        "duration": 3.0027427673339844,
+        "message": "Avg: 0.50s, Max: 0.56s, Success: 100.0%"
+      },
+      {
+        "name": "GitHub API Performance",
+        "duration": 2.8054819107055664,
+        "message": "Avg: 0.43s, Max: 0.56s, Success: 100.0%"
+      }
+    ]
+  },
+  "detailed_results": [
+    {
+      "test_name": "Response Time Analysis",
+      "success": true,
+      "duration": 14.15819001197815,
+      "message": "Avg: 0.25s, P95: 0.35s, Success: 100.0%",
+      "metrics": {
+        "total_requests": 40,
+        "successful_requests": 40,
+        "success_rate": 100.0,
+        "avg_response_time": 0.24769785404205322,
+        "median_response_time": 0.23849833011627197,
+        "min_response_time": 0.2057209014892578,
+        "max_response_time": 0.4029538631439209,
+        "p95_response_time": 0.35260902643203734,
+        "response_time_threshold": 5.0
+      },
+      "error": null,
+      "request_count": 40
+    },
+    {
+      "test_name": "Concurrent Request Handling",
+      "success": true,
+      "duration": 5.113222122192383,
+      "message": "Max concurrency: 10, Success: 100.0%",
+      "metrics": {
+        "concurrency_levels": [
+          1,
+          2,
+          5,
+          10
+        ],
+        "results_by_level": {
+          "1": {
+            "success_rate": 100.0,
+            "avg_response_time": 0.24755501747131348,
+            "total_duration": 0.25195813179016113
+          },
+          "2": {
+            "success_rate": 100.0,
+            "avg_response_time": 0.25479233264923096,
+            "total_duration": 0.2692530155181885
+          },
+          "5": {
+            "success_rate": 100.0,
+            "avg_response_time": 0.2683548927307129,
+            "total_duration": 0.3068828582763672
+          },
+          "10": {
+            "success_rate": 100.0,
+            "avg_response_time": 0.23879764080047608,
+            "total_duration": 0.2719590663909912
+          }
+        },
+        "high_concurrency_success_rate": 100.0,
+        "performance_degradation": false
+      },
+      "error": null,
+      "request_count": 18
+    },
+    {
+      "test_name": "Load Sustainability",
+      "success": true,
+      "duration": 30.202974796295166,
+      "message": "RPS: 2.0, Success: 100.0%, Avg: 0.25s",
+      "metrics": {
+        "duration": 30.202536821365356,
+        "total_requests": 60,
+        "successful_requests": 60,
+        "success_rate": 100.0,
+        "target_rps": 2,
+        "actual_rps": 1.9865880920822465,
+        "avg_response_time": 0.24950292905171711,
+        "first_half_avg": 0.2542496045430501,
+        "second_half_avg": 0.2447562535603841,
+        "performance_degradation": false
+      },
+      "error": null,
+      "request_count": 60
+    },
+    {
+      "test_name": "Azure DevOps API Performance",
+      "success": true,
+      "duration": 3.0027427673339844,
+      "message": "Avg: 0.50s, Max: 0.56s, Success: 100.0%",
+      "metrics": {
+        "total_requests": 3,
+        "successful_requests": 3,
+        "success_rate": 100.0,
+        "avg_response_time": 0.49584444363911945,
+        "max_response_time": 0.5580971240997314,
+        "response_time_threshold": 10.0
+      },
+      "error": null,
+      "request_count": 3
+    },
+    {
+      "test_name": "GitHub API Performance",
+      "success": true,
+      "duration": 2.8054819107055664,
+      "message": "Avg: 0.43s, Max: 0.56s, Success: 100.0%",
+      "metrics": {
+        "total_requests": 3,
+        "successful_requests": 3,
+        "success_rate": 100.0,
+        "avg_response_time": 0.43003273010253906,
+        "max_response_time": 0.5637609958648682,
+        "response_time_threshold": 5.0
+      },
+      "error": null,
+      "request_count": 3
+    }
+  ]
+}
