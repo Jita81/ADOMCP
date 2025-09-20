@@ -1,1 +1,1 @@
-web: python server_mcp_compliant.py --port $PORT --log-level INFO
+web: python main.py --port $PORT --log-level INFO
