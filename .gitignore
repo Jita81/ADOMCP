@@ -75,3 +75,4 @@ AI_COMPLETION.md
 *.temp
 temp/
 tmp/
+.vercel
