@@ -7,20 +7,43 @@ Uses FastAPI for Railway stability with MCP SDK patterns for tool definitions.
 """
 
 import os
+import sys
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import json
 import base64
 import asyncio
 
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request, Response, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import aiohttp
 import uvicorn
+
+# Add security modules
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+try:
+    from security.authentication import AuthenticationManager, AuthToken
+    from security import (SecurityValidator, check_rate_limit, get_security_headers, 
+                         encrypt_api_key_advanced, decrypt_api_key_advanced)
+    SECURITY_AVAILABLE = True
+except ImportError:
+    logger.warning("Security modules not available - using environment variables only")
+    SECURITY_AVAILABLE = False
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize authentication if available
+auth_manager = None
+security_bearer = HTTPBearer(auto_error=False)
+
+if SECURITY_AVAILABLE:
+    auth_manager = AuthenticationManager()
+    logger.info("🔐 Authentication system initialized")
+else:
+    logger.info("🔓 Using environment variables only (no authentication system)")
 
 # Azure DevOps and GitHub API integration (same as compliant version)
 class AzureDevOpsAPI:
@@ -225,6 +248,52 @@ app.add_middleware(
     expose_headers=["Mcp-Session-Id"]
 )
 
+# Authentication helper functions
+async def get_api_tokens_from_auth(user_api_key: str) -> Dict[str, str]:
+    """Get platform API tokens from authenticated user storage"""
+    if not SECURITY_AVAILABLE or not auth_manager:
+        return {}
+    
+    try:
+        # Authenticate the user API key and get stored platform tokens
+        auth_result = auth_manager.authenticate_api_key(user_api_key)
+        if not auth_result.get("valid"):
+            return {}
+        
+        user_id = auth_result.get("user_id")
+        if not user_id:
+            return {}
+        
+        # Get encrypted platform API keys from storage
+        # Note: This is a simplified version - in production you'd use a database
+        stored_keys = {}
+        azure_key = os.getenv(f"USER_{user_id}_AZURE_PAT")
+        github_key = os.getenv(f"USER_{user_id}_GITHUB_TOKEN")
+        
+        if azure_key:
+            stored_keys["azure_pat"] = decrypt_api_key_advanced(azure_key) if SECURITY_AVAILABLE else azure_key
+        if github_key:
+            stored_keys["github_token"] = decrypt_api_key_advanced(github_key) if SECURITY_AVAILABLE else github_key
+            
+        return stored_keys
+    except Exception as e:
+        logger.error(f"Error retrieving API tokens: {str(e)}")
+        return {}
+
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)) -> Optional[str]:
+    """Get current authenticated user from API key"""
+    if not credentials or not SECURITY_AVAILABLE or not auth_manager:
+        return None
+    
+    try:
+        auth_result = auth_manager.authenticate_api_key(credentials.credentials)
+        if auth_result.get("valid"):
+            return auth_result.get("user_id")
+    except Exception:
+        pass
+    
+    return None
+
 # MCP Tools Definitions (using MCP SDK patterns but implemented in FastAPI)
 MCP_TOOLS = [
     {
@@ -336,16 +405,139 @@ async def root():
         "endpoints": {
             "mcp": "/mcp (GET, POST, OPTIONS)",
             "health": "/health",
-            "tools": "/tools"
+            "tools": "/tools",
+            "auth": "/api/auth (GET, POST)",
+            "secure_keys": "/api/secure-keys (GET, POST)"
         },
         "tools_available": len(MCP_TOOLS),
-        "claude_desktop_compatible": True
+        "claude_desktop_compatible": True,
+        "authentication": {
+            "system_available": SECURITY_AVAILABLE,
+            "fallback_mode": "environment_variables" if not SECURITY_AVAILABLE else None,
+            "registration": "/api/auth (POST with email)",
+            "api_key_storage": "/api/secure-keys (authenticated)"
+        }
     }
 
 # Health check endpoint
 @app.get("/health")
 async def health():
     return {"status": "healthy", "server": "ADOMCP", "timestamp": "2025-09-20"}
+
+# Authentication Endpoints
+@app.post("/api/auth")
+async def register_user(request: Request):
+    """User registration and ADOMCP API key generation"""
+    if not SECURITY_AVAILABLE or not auth_manager:
+        raise HTTPException(status_code=503, detail="Authentication system not available")
+    
+    try:
+        body = await request.json()
+        email = body.get("email", "").strip().lower()
+        
+        if not email or "@" not in email:
+            raise HTTPException(status_code=400, detail="Valid email address required")
+        
+        # Generate ADOMCP API key for the user
+        user_token = auth_manager.generate_user_api_key(email)
+        
+        return {
+            "success": True,
+            "message": "User registered successfully",
+            "user_id": user_token.user_id,
+            "api_key": user_token.token,
+            "expires_at": user_token.expires_at.isoformat(),
+            "instructions": {
+                "next_steps": [
+                    "Save your API key securely",
+                    "Use this key to authenticate when storing platform API keys",
+                    "Use /api/secure-keys endpoint to store Azure DevOps and GitHub tokens"
+                ]
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@app.get("/api/auth")
+async def get_auth_info():
+    """Get authentication system information"""
+    return {
+        "authentication_system": "enabled" if SECURITY_AVAILABLE else "disabled",
+        "registration_endpoint": "/api/auth (POST)",
+        "api_key_management": "/api/secure-keys",
+        "instructions": {
+            "registration": "POST to /api/auth with {'email': 'your@email.com'}",
+            "api_key_storage": "Use returned API key to store platform tokens at /api/secure-keys"
+        }
+    }
+
+@app.post("/api/secure-keys")
+async def store_platform_keys(request: Request, current_user: Optional[str] = Depends(get_current_user)):
+    """Store platform API keys for authenticated user"""
+    if not SECURITY_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Authentication system not available")
+    
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Valid ADOMCP API key required")
+    
+    try:
+        body = await request.json()
+        
+        stored_count = 0
+        result = {"success": True, "keys_stored": []}
+        
+        # Store Azure DevOps PAT
+        if "azure_devops_pat" in body:
+            encrypted_pat = encrypt_api_key_advanced(body["azure_devops_pat"]) if SECURITY_AVAILABLE else body["azure_devops_pat"]
+            os.environ[f"USER_{current_user}_AZURE_PAT"] = encrypted_pat
+            stored_count += 1
+            result["keys_stored"].append("azure_devops_pat")
+        
+        # Store GitHub Token
+        if "github_token" in body:
+            encrypted_token = encrypt_api_key_advanced(body["github_token"]) if SECURITY_AVAILABLE else body["github_token"]
+            os.environ[f"USER_{current_user}_GITHUB_TOKEN"] = encrypted_token
+            stored_count += 1
+            result["keys_stored"].append("github_token")
+        
+        if stored_count == 0:
+            raise HTTPException(status_code=400, detail="No valid API keys provided")
+        
+        result["message"] = f"Successfully stored {stored_count} API key(s)"
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Key storage error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to store API keys")
+
+@app.get("/api/secure-keys")
+async def get_stored_keys(current_user: Optional[str] = Depends(get_current_user)):
+    """Get information about stored API keys for authenticated user"""
+    if not SECURITY_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Authentication system not available")
+    
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Valid ADOMCP API key required")
+    
+    stored_keys = []
+    if os.getenv(f"USER_{current_user}_AZURE_PAT"):
+        stored_keys.append("azure_devops_pat")
+    if os.getenv(f"USER_{current_user}_GITHUB_TOKEN"):
+        stored_keys.append("github_token")
+    
+    return {
+        "user_id": current_user,
+        "stored_keys": stored_keys,
+        "instructions": {
+            "store_keys": "POST to /api/secure-keys with platform API keys",
+            "mcp_usage": "Stored keys will be automatically used by MCP tools"
+        }
+    }
 
 # MCP Protocol Implementation (Claude Desktop Compatible)
 @app.options("/mcp")
@@ -423,7 +615,13 @@ async def mcp_post(request: Request, response: Response):
             }
             
         elif method == "tools/call":
-            return await handle_tool_call(params, request_id)
+            # Extract user API key from Authorization header if provided
+            user_api_key = None
+            auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                user_api_key = auth_header[7:]  # Remove "Bearer " prefix
+            
+            return await handle_tool_call(params, request_id, user_api_key)
             
         elif method in ["initialized", "notifications/initialized"]:
             return {"jsonrpc": "2.0", "result": {}, "id": request_id}
@@ -446,14 +644,28 @@ async def mcp_post(request: Request, response: Response):
             "id": request_id
         }
 
-async def handle_tool_call(params: Dict, request_id: Any) -> Dict:
-    """Handle tool call requests"""
+async def handle_tool_call(params: Dict, request_id: Any, user_api_key: Optional[str] = None) -> Dict:
+    """Handle tool call requests with support for both environment variables and user authentication"""
     tool_name = params.get("name")
     tool_arguments = params.get("arguments", {})
     
-    # Get environment variables for API tokens
+    # Get API tokens - try user authentication first, then fall back to environment variables
     azure_pat = os.getenv("AZURE_DEVOPS_PAT")
     github_token = os.getenv("GITHUB_TOKEN")
+    
+    # If user provided API key, try to get their stored tokens
+    if user_api_key and SECURITY_AVAILABLE:
+        try:
+            user_tokens = await get_api_tokens_from_auth(user_api_key)
+            if user_tokens.get("azure_pat"):
+                azure_pat = user_tokens["azure_pat"]
+                logger.info("Using authenticated user's Azure DevOps PAT")
+            if user_tokens.get("github_token"):
+                github_token = user_tokens["github_token"]
+                logger.info("Using authenticated user's GitHub token")
+        except Exception as e:
+            logger.warning(f"Failed to retrieve user tokens: {str(e)}")
+            # Fall back to environment variables
     
     try:
         if tool_name == "create_work_item":
