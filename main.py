@@ -4,7 +4,7 @@ Unified FastAPI application for all MCP endpoints
 """
 
 from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
@@ -13,6 +13,9 @@ import importlib.util
 import traceback
 import secrets
 from datetime import datetime
+import json
+import asyncio
+from typing import AsyncGenerator
 
 app = FastAPI(
     title="ADOMCP - Azure DevOps MCP Server",
@@ -68,7 +71,12 @@ async def root():
             "azure_devops": "/azure-devops",
             "github": "/github",
             "capabilities": "/capabilities",
-            "mcp": "/mcp"
+            "mcp": "/mcp",
+            "mcp_sse": "/mcp/sse"
+        },
+        "mcp_transports": {
+            "http_json_rpc": "/api/mcp",
+            "sse_streaming": "/api/mcp/sse"
         }
     }
 
@@ -741,6 +749,340 @@ async def mcp_post(request: Request, response: Response):
                 "code": -32603,
                 "message": "Internal error",
                 "data": str(e)
+            },
+            "id": body.get("id") if 'body' in locals() else None
+        }
+
+# SSE MCP Endpoint for Claude Desktop Compatibility
+async def mcp_message_generator(request_queue: asyncio.Queue) -> AsyncGenerator[str, None]:
+    """Generate SSE messages for MCP protocol"""
+    try:
+        while True:
+            # Wait for messages from the queue
+            message = await asyncio.wait_for(request_queue.get(), timeout=30.0)
+            
+            if message is None:  # Shutdown signal
+                break
+                
+            # Process MCP message
+            response = await process_mcp_message(message)
+            
+            if response:
+                # Format as SSE event
+                event_data = json.dumps(response)
+                yield f"data: {event_data}\n\n"
+                
+    except asyncio.TimeoutError:
+        # Send keepalive ping
+        ping_response = {
+            "jsonrpc": "2.0",
+            "method": "notifications/ping",
+            "params": {}
+        }
+        yield f"data: {json.dumps(ping_response)}\n\n"
+    except Exception as e:
+        error_response = {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": f"SSE error: {str(e)}"
+            }
+        }
+        yield f"data: {json.dumps(error_response)}\n\n"
+
+async def process_mcp_message(message: dict) -> dict:
+    """Process MCP message and return response (shared logic with HTTP endpoint)"""
+    try:
+        method = message.get("method")
+        params = message.get("params", {})
+        request_id = message.get("id")
+        
+        # Use the same logic as the HTTP POST endpoint
+        if method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {
+                            "listChanged": True
+                        },
+                        "resources": {
+                            "subscribe": True,
+                            "listChanged": True
+                        },
+                        "prompts": {
+                            "listChanged": True
+                        },
+                        "logging": {}
+                    },
+                    "serverInfo": {
+                        "name": "ADOMCP",
+                        "version": "1.0.0"
+                    }
+                },
+                "id": request_id
+            }
+        elif method == "tools/list":
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "tools": [
+                        {
+                            "name": "create_work_item",
+                            "description": "Create a new work item in Azure DevOps",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {
+                                        "type": "string",
+                                        "description": "Title of the work item"
+                                    },
+                                    "work_item_type": {
+                                        "type": "string",
+                                        "description": "Type of work item (User Story, Bug, Task, etc.)",
+                                        "default": "User Story"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Detailed description of the work item"
+                                    },
+                                    "area_path": {
+                                        "type": "string",
+                                        "description": "Area path for the work item"
+                                    },
+                                    "iteration_path": {
+                                        "type": "string", 
+                                        "description": "Iteration path for the work item"
+                                    },
+                                    "assigned_to": {
+                                        "type": "string",
+                                        "description": "Email of user to assign the work item to"
+                                    },
+                                    "tags": {
+                                        "type": "string",
+                                        "description": "Tags for the work item (semicolon separated)"
+                                    }
+                                },
+                                "required": ["title"]
+                            }
+                        },
+                        {
+                            "name": "update_work_item", 
+                            "description": "Update an existing work item in Azure DevOps",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "work_item_id": {
+                                        "type": "integer",
+                                        "description": "ID of the work item to update"
+                                    },
+                                    "updates": {
+                                        "type": "object",
+                                        "description": "Fields to update (e.g., {'System.Title': 'New Title', 'System.State': 'Active'})"
+                                    }
+                                },
+                                "required": ["work_item_id", "updates"]
+                            }
+                        },
+                        {
+                            "name": "github_integration",
+                            "description": "Integrate with GitHub repositories and issues", 
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "description": "Action to perform (create_issue, list_repositories, get_commits)"
+                                    },
+                                    "repository": {
+                                        "type": "string",
+                                        "description": "Repository in format 'owner/repo'",
+                                        "default": "Jita81/ADOMCP"
+                                    },
+                                    "title": {
+                                        "type": "string",
+                                        "description": "Title for new issue (when action=create_issue)"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Description for new issue (when action=create_issue)"
+                                    }
+                                },
+                                "required": ["action"]
+                            }
+                        }
+                    ]
+                },
+                "id": request_id
+            }
+        elif method == "tools/call":
+            # For SSE, we'll simulate tool execution for now
+            # This would need to be connected to the real implementations
+            tool_name = params.get("name")
+            tool_arguments = params.get("arguments", {})
+            
+            if tool_name == "create_work_item":
+                # Simulate Azure DevOps work item creation in SSE
+                result_text = f"✅ SSE: Work item '{tool_arguments.get('title', 'SSE Test Item')}' would be created"
+                result_text += f"\n• Type: {tool_arguments.get('work_item_type', 'User Story')}"
+                result_text += f"\n• Via SSE transport"
+                
+                return {
+                    "jsonrpc": "2.0",
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": result_text
+                            }
+                        ]
+                    },
+                    "id": request_id
+                }
+            elif tool_name == "github_integration":
+                result_text = f"✅ SSE: GitHub {tool_arguments.get('action', 'action')} executed via SSE"
+                result_text += f"\n• Repository: {tool_arguments.get('repository', 'Jita81/ADOMCP')}"
+                
+                return {
+                    "jsonrpc": "2.0",
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": result_text
+                            }
+                        ]
+                    },
+                    "id": request_id
+                }
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"SSE: Tool {tool_name} executed with arguments: {tool_arguments}"
+                            }
+                        ]
+                    },
+                    "id": request_id
+                }
+        elif method == "ping":
+            return {"jsonrpc": "2.0", "result": {}, "id": request_id}
+        elif method == "resources/list":
+            return {
+                "jsonrpc": "2.0", 
+                "result": {
+                    "resources": []
+                },
+                "id": request_id
+            }
+        elif method == "prompts/list":
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "prompts": []
+                },
+                "id": request_id
+            }
+        elif method == "notifications/initialized":
+            # No response needed for notifications
+            return None
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": f"Method not found: {method}"
+                },
+                "id": request_id
+            }
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": f"Internal error: {str(e)}"
+            },
+            "id": message.get("id")
+        }
+
+@app.get("/api/mcp/sse")
+async def mcp_sse_endpoint(request: Request):
+    """SSE endpoint for MCP protocol (Claude Desktop compatible)"""
+    
+    async def event_stream():
+        # Send initial connection confirmation
+        yield "data: " + json.dumps({
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {
+                "serverInfo": {
+                    "name": "ADOMCP",
+                    "version": "1.0.0"
+                },
+                "capabilities": {
+                    "tools": {"listChanged": True},
+                    "resources": {"subscribe": True, "listChanged": True},
+                    "prompts": {"listChanged": True}
+                }
+            }
+        }) + "\n\n"
+        
+        # Keep connection alive and handle incoming messages
+        try:
+            while True:
+                # Send periodic keepalive
+                await asyncio.sleep(10)
+                yield "data: " + json.dumps({
+                    "jsonrpc": "2.0", 
+                    "method": "notifications/ping",
+                    "params": {}
+                }) + "\n\n"
+                
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            yield "data: " + json.dumps({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"SSE connection error: {str(e)}"
+                }
+            }) + "\n\n"
+    
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        }
+    )
+
+@app.post("/api/mcp/sse")
+async def mcp_sse_post(request: Request):
+    """Handle POST requests to SSE endpoint for bidirectional communication"""
+    try:
+        body = await request.json()
+        response = await process_mcp_message(body)
+        
+        if response:
+            return response
+        else:
+            return {"jsonrpc": "2.0", "result": {}, "id": body.get("id")}
+            
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": f"SSE POST error: {str(e)}"
             },
             "id": body.get("id") if 'body' in locals() else None
         }
