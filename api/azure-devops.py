@@ -152,7 +152,7 @@ class handler(BaseHTTPRequestHandler):
         }
         
         # Test project access
-        url = f"{organization_url}/{project}/_apis/projects/{project}?api-version=7.1"
+        url = f"{organization_url}/_apis/projects/{project}?api-version=7.1"
         result = self._make_api_request(url, headers=headers)
         
         if result['success']:
