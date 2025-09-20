@@ -473,30 +473,203 @@ async def azure_devops_get():
 
 @app.post("/api/azure-devops")
 async def azure_devops_post(request: Request):
-    """Azure DevOps operations"""
+    """Azure DevOps operations with REAL API integration"""
+    import base64
+    import requests as http_requests
+    import urllib.parse
+    
     try:
         body = await request.json()
         operation = body.get("operation")
         
+        # Get credentials from request or environment variables
+        organization_url = body.get("organization_url", os.getenv("AZURE_DEVOPS_ORGANIZATION_URL", "https://dev.azure.com/GenerativeAILab"))
+        pat_token = body.get("pat_token") or body.get("test_pat_token") or os.getenv("AZURE_DEVOPS_PAT")
+        project_id = body.get("project_id", os.getenv("AZURE_DEVOPS_PROJECT_ID", "bef90b5b-8996-49cd-a9ac-8893a4ca7677"))
+        
+        if not pat_token:
+            return {
+                "success": False,
+                "message": "Azure DevOps PAT token required. Provide via 'pat_token' or 'test_pat_token' parameter, or set AZURE_DEVOPS_PAT environment variable."
+            }
+        
+        # Create authentication header for REAL API calls
+        auth_header = base64.b64encode(f":{pat_token}".encode()).decode()
+        headers = {
+            "Authorization": f"Basic {auth_header}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
         if operation == "create_work_item":
-            return {
-                "success": True,
-                "message": "Work item creation simulated",
-                "work_item_id": 12345,
-                "operation": operation,
-                "data": body
-            }
+            # REAL Azure DevOps work item creation
+            work_item_type = body.get("work_item_type", "User Story")
+            title = body.get("title", "ADOMCP Created Work Item")
+            description = body.get("description", "Created via ADOMCP REAL API Integration")
+            
+            # Azure DevOps work item creation API
+            url = f"{organization_url}/{project_id}/_apis/wit/workitems/${urllib.parse.quote(work_item_type)}?api-version=7.0"
+            
+            work_item_data = [
+                {
+                    "op": "add",
+                    "path": "/fields/System.Title",
+                    "value": title
+                },
+                {
+                    "op": "add", 
+                    "path": "/fields/System.Description",
+                    "value": description
+                }
+            ]
+            
+            # Add optional fields if provided
+            if body.get("area_path"):
+                work_item_data.append({
+                    "op": "add",
+                    "path": "/fields/System.AreaPath", 
+                    "value": body.get("area_path")
+                })
+            
+            if body.get("iteration_path"):
+                work_item_data.append({
+                    "op": "add",
+                    "path": "/fields/System.IterationPath",
+                    "value": body.get("iteration_path")
+                })
+            
+            if body.get("assigned_to"):
+                work_item_data.append({
+                    "op": "add",
+                    "path": "/fields/System.AssignedTo",
+                    "value": body.get("assigned_to")
+                })
+            
+            if body.get("tags"):
+                work_item_data.append({
+                    "op": "add",
+                    "path": "/fields/System.Tags",
+                    "value": body.get("tags")
+                })
+            
+            # Add custom fields
+            custom_fields = body.get("custom_fields", {})
+            for field_name, field_value in custom_fields.items():
+                work_item_data.append({
+                    "op": "add",
+                    "path": f"/fields/{field_name}",
+                    "value": field_value
+                })
+            
+            headers["Content-Type"] = "application/json-patch+json"
+            
+            # Make REAL API call to Azure DevOps
+            response = http_requests.post(url, json=work_item_data, headers=headers, timeout=30)
+            
+            if response.status_code in [200, 201]:
+                work_item = response.json()
+                return {
+                    "success": True,
+                    "message": "✅ REAL: Work item created successfully in Azure DevOps",
+                    "work_item_id": work_item.get("id"),
+                    "work_item_url": work_item.get("_links", {}).get("html", {}).get("href"),
+                    "operation": operation,
+                    "work_item_type": work_item_type,
+                    "api_response": "REAL_API_SUCCESS"
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"❌ REAL: Failed to create work item: {response.status_code}",
+                    "error": response.text,
+                    "api_response": "REAL_API_FAILED"
+                }
+                
         elif operation == "get_projects":
-            return {
-                "success": True,
-                "projects": [
-                    {
-                        "id": "sample-project-id",
-                        "name": "Sample Project",
-                        "description": "Sample Azure DevOps project"
-                    }
-                ]
-            }
+            # REAL Azure DevOps projects API call
+            url = f"{organization_url}/_apis/projects?api-version=7.0"
+            
+            response = http_requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                projects_data = response.json()
+                projects = []
+                for project in projects_data.get("value", []):
+                    projects.append({
+                        "id": project.get("id"),
+                        "name": project.get("name"),
+                        "description": project.get("description", ""),
+                        "url": project.get("url"),
+                        "state": project.get("state"),
+                        "visibility": project.get("visibility")
+                    })
+                
+                return {
+                    "success": True,
+                    "message": "✅ REAL: Projects retrieved from Azure DevOps",
+                    "projects": projects,
+                    "count": len(projects),
+                    "api_response": "REAL_API_SUCCESS"
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"❌ REAL: Failed to get projects: {response.status_code}",
+                    "error": response.text,
+                    "api_response": "REAL_API_FAILED"
+                }
+                
+        elif operation == "update_work_item":
+            # REAL Azure DevOps work item update
+            work_item_id = body.get("work_item_id")
+            updates = body.get("updates", {})
+            
+            if not work_item_id:
+                return {
+                    "success": False,
+                    "message": "work_item_id is required for update operation"
+                }
+            
+            url = f"{organization_url}/{project_id}/_apis/wit/workitems/{work_item_id}?api-version=7.0"
+            
+            update_data = []
+            for field, value in updates.items():
+                # Handle different field formats
+                if field.startswith("/fields/"):
+                    field_path = field
+                elif field.startswith("System.") or field.startswith("Custom.") or field.startswith("Microsoft."):
+                    field_path = f"/fields/{field}"
+                else:
+                    field_path = f"/fields/System.{field}"
+                
+                update_data.append({
+                    "op": "add",
+                    "path": field_path,
+                    "value": value
+                })
+            
+            headers["Content-Type"] = "application/json-patch+json"
+            
+            response = http_requests.patch(url, json=update_data, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                work_item = response.json()
+                return {
+                    "success": True,
+                    "message": "✅ REAL: Work item updated successfully in Azure DevOps",
+                    "work_item_id": work_item.get("id"),
+                    "updates_applied": len(update_data),
+                    "updated_fields": list(updates.keys()),
+                    "work_item_url": work_item.get("_links", {}).get("html", {}).get("href"),
+                    "api_response": "REAL_API_SUCCESS"
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"❌ REAL: Failed to update work item: {response.status_code}",
+                    "error": response.text,
+                    "api_response": "REAL_API_FAILED"
+                }
         else:
             return {
                 "success": False,
@@ -505,7 +678,12 @@ async def azure_devops_post(request: Request):
             }
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "success": False,
+            "message": "❌ REAL: Azure DevOps API integration failed",
+            "error": str(e),
+            "operation": body.get("operation") if 'body' in locals() else "unknown"
+        }
 
 @app.get("/api/github")
 async def github_get():
