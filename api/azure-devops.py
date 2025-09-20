@@ -113,7 +113,8 @@ class handler(BaseHTTPRequestHandler):
             
             if data:
                 data = json.dumps(data).encode('utf-8')
-                headers['Content-Type'] = 'application/json'
+                if 'Content-Type' not in headers:
+                    headers['Content-Type'] = 'application/json'
             
             req = urllib.request.Request(url, data=data, headers=headers, method=method)
             
