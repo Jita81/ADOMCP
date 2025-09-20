@@ -8,7 +8,7 @@ import json
 import time
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, asdict
 from functools import wraps
@@ -31,6 +31,8 @@ except ImportError:
     OTEL_AVAILABLE = False
     trace = None
     metrics = None
+
+# OpenTelemetry imports handled above
 
 logger = logging.getLogger(__name__)
 

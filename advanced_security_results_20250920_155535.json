@@ -1,0 +1,101 @@
+{
+  "timestamp": "2025-09-20T15:55:35.717363",
+  "total_tests": 8,
+  "passed_tests": 2,
+  "failed_tests": 6,
+  "success_rate": 25.0,
+  "total_duration": 8.513153076171875,
+  "results": [
+    {
+      "test_name": "Workload Identity Manager",
+      "success": false,
+      "duration": 0.4270918369293213,
+      "message": "Workload identity module import failed: No module named 'jwt'",
+      "details": null,
+      "error": "No module named 'jwt'"
+    },
+    {
+      "test_name": "AES-GCM Encryption",
+      "success": true,
+      "duration": 0.028244972229003906,
+      "message": "AES-GCM encryption working correctly with tampering protection",
+      "details": {
+        "algorithm": "AES-256-GCM",
+        "key_version": "v2",
+        "encryption_successful": true,
+        "decryption_successful": true,
+        "tamper_detection": true,
+        "cross_user_protection": true,
+        "data_integrity": true
+      },
+      "error": null
+    },
+    {
+      "test_name": "Advanced Encryption Features",
+      "success": true,
+      "duration": 0.00046896934509277344,
+      "message": "Advanced encryption features working correctly",
+      "details": {
+        "audit_hash_length": 16,
+        "rotation_status": {
+          "current_version": "v2",
+          "algorithm": "AES-256-GCM",
+          "master_key_age_days": 0,
+          "rotation_recommended": false,
+          "next_rotation_date": "2025-12-19T15:55:29.670705",
+          "supported_versions": [
+            "v2"
+          ],
+          "migration_needed": false
+        },
+        "key_rotation": "v2 -> v3"
+      },
+      "error": null
+    },
+    {
+      "test_name": "Observability Manager",
+      "success": false,
+      "duration": 0.002335071563720703,
+      "message": "Observability module import failed: No module named 'jwt'",
+      "details": null,
+      "error": "No module named 'jwt'"
+    },
+    {
+      "test_name": "Supabase Integration",
+      "success": false,
+      "duration": 0.002499103546142578,
+      "message": "Supabase integration module import failed: No module named 'jwt'",
+      "details": null,
+      "error": "No module named 'jwt'"
+    },
+    {
+      "test_name": "Security Module Integration",
+      "success": false,
+      "duration": 0.002399921417236328,
+      "message": "Security module integration failed: No module named 'jwt'",
+      "details": null,
+      "error": "No module named 'jwt'"
+    },
+    {
+      "test_name": "Graceful Fallbacks",
+      "success": false,
+      "duration": 0.0040318965911865234,
+      "message": "Graceful fallbacks working: 0/3 modules",
+      "details": {
+        "jwt_fallback": false,
+        "opentelemetry_fallback": false,
+        "supabase_fallback": false,
+        "total_working": 0
+      },
+      "error": null
+    },
+    {
+      "test_name": "Performance Impact",
+      "success": false,
+      "duration": 0.0040950775146484375,
+      "message": "Performance impact test failed: No module named 'jwt'",
+      "details": null,
+      "error": "No module named 'jwt'"
+    }
+  ]
+}

@@ -5,7 +5,13 @@ Implements secretless authentication using platform-native identity services
 
 import os
 import json
-import jwt
+# Try to import jwt - graceful fallback if not available
+try:
+    import jwt
+    JWT_AVAILABLE = True
+except ImportError:
+    JWT_AVAILABLE = False
+    jwt = None
 import time
 import requests
 from datetime import datetime, timedelta
@@ -103,6 +109,10 @@ class WorkloadIdentityManager:
         Get GitHub App JWT token for GitHub access
         This provides better security than PAT tokens for applications
         """
+        if not JWT_AVAILABLE:
+            logger.debug("JWT library not available, cannot create GitHub App tokens")
+            return None
+            
         cache_key = f"github_app_{app_id}_{installation_id or 'app'}"
         
         # Check cache first
@@ -246,13 +256,17 @@ class WorkloadIdentityManager:
                 return None
             
             # Supabase service role tokens are long-lived JWTs
-            # Decode to check expiry
-            try:
-                decoded = jwt.decode(service_role_key, options={"verify_signature": False})
-                exp = decoded.get('exp')
-                expires_at = datetime.fromtimestamp(exp) if exp else datetime.now() + timedelta(days=365)
-            except:
-                # If we can't decode, assume it's valid for a year
+            # Decode to check expiry (only if JWT library available)
+            if JWT_AVAILABLE:
+                try:
+                    decoded = jwt.decode(service_role_key, options={"verify_signature": False})
+                    exp = decoded.get('exp')
+                    expires_at = datetime.fromtimestamp(exp) if exp else datetime.now() + timedelta(days=365)
+                except:
+                    # If we can't decode, assume it's valid for a year
+                    expires_at = datetime.now() + timedelta(days=365)
+            else:
+                # Without JWT library, assume it's valid for a year
                 expires_at = datetime.now() + timedelta(days=365)
             
             identity_token = IdentityToken(

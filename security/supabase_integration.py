@@ -12,7 +12,11 @@ from dataclasses import dataclass, asdict
 import logging
 import asyncio
 from .advanced_encryption import EncryptedData, advanced_encryption_manager
-from .workload_identity import workload_identity_manager
+# Import workload identity manager with fallback
+try:
+    from .workload_identity import workload_identity_manager
+except ImportError:
+    workload_identity_manager = None
 
 # Try to import supabase - graceful fallback if not available
 try:
