@@ -359,19 +359,23 @@ async def mcp_post(request: Request):
         
         # Handle different MCP methods
         if method == "initialize":
-            # Handle MCP initialization handshake
+            # Handle MCP initialization handshake - following MCP specification
             return {
                 "jsonrpc": "2.0",
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
-                        "tools": {},
-                        "resources": {},
-                        "prompts": {},
-                        "roots": {
+                        "tools": {
                             "listChanged": True
                         },
-                        "sampling": {}
+                        "resources": {
+                            "subscribe": True,
+                            "listChanged": True
+                        },
+                        "prompts": {
+                            "listChanged": True
+                        },
+                        "logging": {}
                     },
                     "serverInfo": {
                         "name": "ADOMCP",
@@ -387,36 +391,86 @@ async def mcp_post(request: Request):
                     "tools": [
                         {
                             "name": "create_work_item",
-                            "description": "Create Azure DevOps work item",
+                            "description": "Create a new work item in Azure DevOps",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "title": {"type": "string"},
-                                    "work_item_type": {"type": "string"},
-                                    "description": {"type": "string"}
-                                }
+                                    "title": {
+                                        "type": "string",
+                                        "description": "Title of the work item"
+                                    },
+                                    "work_item_type": {
+                                        "type": "string",
+                                        "description": "Type of work item (User Story, Bug, Task, etc.)",
+                                        "default": "User Story"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Detailed description of the work item"
+                                    },
+                                    "area_path": {
+                                        "type": "string",
+                                        "description": "Area path for the work item"
+                                    },
+                                    "iteration_path": {
+                                        "type": "string", 
+                                        "description": "Iteration path for the work item"
+                                    },
+                                    "assigned_to": {
+                                        "type": "string",
+                                        "description": "Email of user to assign the work item to"
+                                    },
+                                    "tags": {
+                                        "type": "string",
+                                        "description": "Tags for the work item (semicolon separated)"
+                                    }
+                                },
+                                "required": ["title"]
                             }
                         },
                         {
                             "name": "update_work_item", 
-                            "description": "Update Azure DevOps work item",
+                            "description": "Update an existing work item in Azure DevOps",
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "work_item_id": {"type": "integer"},
-                                    "updates": {"type": "object"}
-                                }
+                                    "work_item_id": {
+                                        "type": "integer",
+                                        "description": "ID of the work item to update"
+                                    },
+                                    "updates": {
+                                        "type": "object",
+                                        "description": "Fields to update (e.g., {'System.Title': 'New Title', 'System.State': 'Active'})"
+                                    }
+                                },
+                                "required": ["work_item_id", "updates"]
                             }
                         },
                         {
                             "name": "github_integration",
-                            "description": "GitHub repository integration", 
+                            "description": "Integrate with GitHub repositories and issues", 
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {
-                                    "action": {"type": "string"},
-                                    "repository": {"type": "string"}
-                                }
+                                    "action": {
+                                        "type": "string",
+                                        "description": "Action to perform (create_issue, list_repositories, get_commits)"
+                                    },
+                                    "repository": {
+                                        "type": "string",
+                                        "description": "Repository in format 'owner/repo'",
+                                        "default": "Jita81/ADOMCP"
+                                    },
+                                    "title": {
+                                        "type": "string",
+                                        "description": "Title for new issue (when action=create_issue)"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Description for new issue (when action=create_issue)"
+                                    }
+                                },
+                                "required": ["action"]
                             }
                         }
                     ]
@@ -621,10 +675,31 @@ async def mcp_post(request: Request):
                  }
         elif method == "initialized":
             # Handle MCP initialized notification (no response needed)
-            return {"jsonrpc": "2.0", "result": None, "id": request_id}
+            return {"jsonrpc": "2.0", "result": {}, "id": request_id}
         elif method == "notifications/initialized":
-            # Alternative initialized notification format
-            return {"jsonrpc": "2.0", "result": None, "id": request_id}
+            # MCP initialized notification - no response required for notifications
+            return None
+        elif method == "ping":
+            # Handle ping requests
+            return {"jsonrpc": "2.0", "result": {}, "id": request_id}
+        elif method == "resources/list":
+            # Handle resources list (we don't have resources yet)
+            return {
+                "jsonrpc": "2.0", 
+                "result": {
+                    "resources": []
+                },
+                "id": request_id
+            }
+        elif method == "prompts/list":
+            # Handle prompts list (we don't have prompts yet)
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "prompts": []
+                },
+                "id": request_id
+            }
         else:
             raise HTTPException(status_code=400, detail=f"Unknown method: {method}")
             
