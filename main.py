@@ -80,111 +80,157 @@ async def health():
         "deployment": "railway"
     }
 
-# Import all API handlers directly
-@app.get("/api/oauth")
-async def oauth_get():
-    """OAuth endpoint"""
-    return {
-        "service": "ADOMCP OAuth Service",
-        "endpoints": {
-            "login": "/api/oauth/login",
-            "callback": "/api/oauth/callback",
-            "status": "/api/oauth/status"
-        },
-        "providers": ["github", "google", "microsoft"],
-        "status": "operational"
-    }
+# FastAPI wrapper for existing BaseHTTPRequestHandler endpoints
+import io
+from fastapi.responses import Response
 
-@app.get("/api/auth")  
-async def auth_get():
-    """Authentication endpoint"""
-    return {
-        "service": "ADOMCP Authentication Service", 
-        "authentication_required": True,
-        "registration": "POST /api/auth with email",
-        "api_key_format": "ADOMCP API keys",
-        "status": "operational"
-    }
+class MockBaseRequestHandler:
+    """Mock BaseHTTPRequestHandler for FastAPI integration"""
+    def __init__(self, path: str, method: str, body: bytes = b"", headers: dict = None):
+        self.path = path
+        self.command = method
+        self.rfile = io.BytesIO(body)
+        self.headers = headers or {}
+        self.response_status = 200
+        self.response_headers = {}
+        self.response_body = ""
+        
+    def send_response(self, code):
+        self.response_status = code
+        
+    def send_header(self, keyword, value):
+        self.response_headers[keyword] = value
+        
+    def end_headers(self):
+        pass
+        
+    def wfile_write(self, data):
+        if isinstance(data, bytes):
+            self.response_body = data.decode('utf-8')
+        else:
+            self.response_body = str(data)
 
-@app.get("/api/secure-keys")
-async def secure_keys():
-    """Secure API key management"""
-    return {
-        "service": "ADOMCP Secure Key Management",
-        "authentication_required": True,
-        "supported_platforms": ["azure-devops", "github", "gitlab"],
-        "operations": ["store", "retrieve", "list"],
-        "status": "operational"
-    }
+async def handle_api_endpoint(endpoint: str, request: Request):
+    """Generic handler for all API endpoints"""
+    try:
+        # Load the appropriate handler
+        handler_class = load_api_handler(endpoint.replace('-', '_'))
+        if not handler_class:
+            raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} not found")
+        
+        # Get request details
+        body = await request.body()
+        
+        # Create mock handler
+        mock_handler = MockBaseRequestHandler(
+            path=f"/api/{endpoint}",
+            method=request.method,
+            body=body,
+            headers=dict(request.headers)
+        )
+        
+        # Override wfile.write to capture response
+        original_write = mock_handler.wfile_write
+        response_data = []
+        
+        def capture_write(data):
+            response_data.append(data)
+            original_write(data)
+            
+        # Create actual handler instance
+        actual_handler = handler_class()
+        
+        # Copy mock properties to actual handler
+        actual_handler.path = mock_handler.path
+        actual_handler.command = mock_handler.command
+        actual_handler.rfile = mock_handler.rfile
+        actual_handler.headers = mock_handler.headers
+        actual_handler.send_response = mock_handler.send_response
+        actual_handler.send_header = mock_handler.send_header
+        actual_handler.end_headers = mock_handler.end_headers
+        
+        # Override wfile.write
+        actual_handler.wfile = type('MockFile', (), {
+            'write': lambda self, data: response_data.append(data)
+        })()
+        
+        # Call the appropriate method
+        if request.method == "GET" and hasattr(actual_handler, 'do_GET'):
+            actual_handler.do_GET()
+        elif request.method == "POST" and hasattr(actual_handler, 'do_POST'):
+            actual_handler.do_POST()
+        elif request.method == "PUT" and hasattr(actual_handler, 'do_PUT'):
+            actual_handler.do_PUT()
+        elif request.method == "DELETE" and hasattr(actual_handler, 'do_DELETE'):
+            actual_handler.do_DELETE()
+        else:
+            raise HTTPException(status_code=405, detail="Method not allowed")
+        
+        # Combine response data
+        if response_data:
+            response_body = b''.join(d if isinstance(d, bytes) else str(d).encode() for d in response_data)
+        else:
+            response_body = mock_handler.response_body.encode() if mock_handler.response_body else b'{"status": "processed"}'
+        
+        # Return response
+        return Response(
+            content=response_body,
+            status_code=mock_handler.response_status,
+            headers=mock_handler.response_headers,
+            media_type="application/json"
+        )
+        
+    except Exception as e:
+        print(f"Error in API handler for {endpoint}: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/secure-mcp")
-async def secure_mcp():
+# Authentication endpoints
+@app.api_route("/api/oauth", methods=["GET", "POST"])
+async def oauth_endpoint(request: Request):
+    """OAuth authentication endpoint"""
+    return await handle_api_endpoint("oauth", request)
+
+@app.api_route("/api/auth", methods=["GET", "POST"])  
+async def auth_endpoint(request: Request):
+    """User authentication/registration endpoint"""
+    return await handle_api_endpoint("auth", request)
+
+@app.api_route("/api/secure-keys", methods=["GET", "POST", "PUT", "DELETE"])
+async def secure_keys_endpoint(request: Request):
+    """Secure API key management endpoint"""
+    return await handle_api_endpoint("secure_keys", request)
+
+@app.api_route("/api/secure-mcp", methods=["GET", "POST"])
+async def secure_mcp_endpoint(request: Request):
     """Secure MCP JSON-RPC endpoint"""
-    return {
-        "service": "ADOMCP Secure MCP",
-        "protocol": "JSON-RPC 2.0",
-        "authentication_required": True,
-        "tools": ["create_work_item", "update_work_item", "manage_attachments"],
-        "status": "operational"
-    }
+    return await handle_api_endpoint("secure_mcp", request)
 
-@app.get("/api/oauth-mcp")  
-async def oauth_mcp():
+@app.api_route("/api/oauth-mcp", methods=["GET", "POST"])  
+async def oauth_mcp_endpoint(request: Request):
     """OAuth-protected MCP endpoint"""
-    return {
-        "service": "ADOMCP OAuth MCP",
-        "protocol": "JSON-RPC 2.0", 
-        "authentication": "OAuth",
-        "providers": ["github", "google", "microsoft"],
-        "status": "operational"
-    }
+    return await handle_api_endpoint("oauth_mcp", request)
 
-@app.get("/api/azure-devops")
-async def azure_devops():
-    """Azure DevOps integration"""
-    return {
-        "service": "Azure DevOps Integration",
-        "operations": ["work_items", "projects", "attachments"],
-        "authentication": "PAT token required",
-        "status": "operational"
-    }
+# Core MCP endpoints
+@app.api_route("/api/azure-devops", methods=["GET", "POST"])
+async def azure_devops_endpoint(request: Request):
+    """Azure DevOps integration endpoint"""
+    return await handle_api_endpoint("azure-devops", request)
 
-@app.get("/api/github")
-async def github():
-    """GitHub integration"""
-    return {
-        "service": "GitHub Integration", 
-        "operations": ["issues", "repositories", "commits"],
-        "authentication": "GitHub token required",
-        "status": "operational"
-    }
+@app.api_route("/api/github", methods=["GET", "POST"])
+async def github_endpoint(request: Request):
+    """GitHub integration endpoint"""
+    return await handle_api_endpoint("github", request)
 
-@app.get("/api/capabilities")
-async def capabilities():
-    """MCP capabilities"""
-    return {
-        "service": "ADOMCP Capabilities",
-        "tools": [
-            "create_work_item",
-            "update_work_item", 
-            "manage_relationships",
-            "manage_attachments",
-            "github_integration"
-        ],
-        "resources": ["azure-devops", "github", "gitlab"],
-        "status": "operational"
-    }
+@app.api_route("/api/capabilities", methods=["GET"])
+async def capabilities_endpoint(request: Request):
+    """MCP capabilities endpoint"""
+    return await handle_api_endpoint("capabilities", request)
 
-@app.get("/api/mcp")
-async def mcp():
-    """Core MCP endpoint"""
-    return {
-        "service": "ADOMCP Core MCP",
-        "protocol": "JSON-RPC 2.0",
-        "version": "2.0.0",
-        "capabilities": ["tools", "resources", "prompts"],
-        "status": "operational"
-    }
+@app.api_route("/api/mcp", methods=["GET", "POST"])
+async def mcp_endpoint(request: Request):
+    """Core MCP JSON-RPC endpoint"""
+    return await handle_api_endpoint("mcp", request)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
