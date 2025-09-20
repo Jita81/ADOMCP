@@ -16,6 +16,9 @@ from .workload_identity import (
 from .observability import (
     start_request_trace, end_request_trace, observability_manager, trace_function
 )
+from .authentication import (
+    authenticate_api_request, generate_user_api_key, validate_user_access, auth_manager
+)
 
 # Try to import Supabase integration
 try:
@@ -62,6 +65,12 @@ __all__ = [
     'end_request_trace',
     'observability_manager',
     'trace_function',
+    
+    # Authentication
+    'authenticate_api_request',
+    'generate_user_api_key',
+    'validate_user_access',
+    'auth_manager',
     
     # Supabase integration (if available)
     'store_api_key_secure',

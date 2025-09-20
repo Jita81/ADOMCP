@@ -1,0 +1,395 @@
+{
+  "summary": {
+    "timestamp": "2025-09-20T16:30:38.908492",
+    "total_tests": 15,
+    "passed": 10,
+    "failed": 5,
+    "success_rate": 66.66666666666666,
+    "total_duration": 29.463275909423828,
+    "mcp_server_url": "https://adomcp.vercel.app",
+    "failed_tests": [
+      {
+        "name": "All Endpoints Accessible",
+        "error": null,
+        "message": "Failed endpoints: ['/api/auth (404)', '/api/secure-keys (404)', '/api/secure-mcp (404)']"
+      },
+      {
+        "name": "Authentication System",
+        "error": "404 Client Error: Not Found for url: https://adomcp.vercel.app/api/auth",
+        "message": "Authentication system test failed"
+      },
+      {
+        "name": "Secure API Key Management",
+        "error": null,
+        "message": "No ADOMCP API key available - authentication test may have failed"
+      },
+      {
+        "name": "Secure MCP Protocol",
+        "error": null,
+        "message": "No ADOMCP API key available - authentication test may have failed"
+      },
+      {
+        "name": "Security Features",
+        "error": "Expecting value: line 1 column 1 (char 0)",
+        "message": "Security features test failed"
+      }
+    ],
+    "passed_tests": [
+      {
+        "name": "MCP Server Health Check",
+        "duration": 0.7925598621368408,
+        "message": "Server healthy - Version 2.2.0"
+      },
+      {
+        "name": "MCP JSON-RPC Protocol",
+        "duration": 0.5214598178863525,
+        "message": "JSON-RPC protocol working - 3 tools available"
+      },
+      {
+        "name": "Azure DevOps Connection",
+        "duration": 0.7873332500457764,
+        "message": "Connected to project: MCPTest"
+      },
+      {
+        "name": "GitHub Connection",
+        "duration": 0.3608248233795166,
+        "message": "Connected to repository: Jita81/ADOMCP"
+      },
+      {
+        "name": "Azure DevOps Work Item CRUD",
+        "duration": 1.5177841186523438,
+        "message": "CRUD operations successful on work item 75"
+      },
+      {
+        "name": "GitHub Issue Creation",
+        "duration": 0.5371708869934082,
+        "message": "Created GitHub issue #9"
+      },
+      {
+        "name": "API Key Management",
+        "duration": 0.48506689071655273,
+        "message": "API key management working"
+      },
+      {
+        "name": "Supabase Configuration",
+        "duration": 0.5195803642272949,
+        "message": "Supabase configuration endpoints working"
+      },
+      {
+        "name": "Legacy Endpoint Deprecation",
+        "duration": 0.7091047763824463,
+        "message": "All 3 legacy endpoints accessible (backward compatibility)"
+      },
+      {
+        "name": "Error Handling",
+        "duration": 0.7081429958343506,
+        "message": "All 3 error handling tests passed"
+      }
+    ]
+  },
+  "detailed_results": [
+    {
+      "test_name": "MCP Server Health Check",
+      "success": true,
+      "duration": 0.7925598621368408,
+      "message": "Server healthy - Version 2.2.0",
+      "details": {
+        "status": "healthy",
+        "service": "Azure DevOps Multi-Platform MCP",
+        "version": "2.2.0",
+        "timestamp": "2025-09-20T15:30:10.111324",
+        "message": "Vercel deployment successful!",
+        "endpoints": {
+          "health": "/health",
+          "test": "/api/test",
+          "capabilities": "/api/capabilities",
+          "mcp": "/api/mcp"
+        },
+        "api_info": {
+          "note": "Each /api/* endpoint is a separate Vercel function",
+          "protocol": "REST + JSON-RPC 2.0 for MCP"
+        },
+        "docs": "Use /api/capabilities to see available tools"
+      },
+      "error": null
+    },
+    {
+      "test_name": "All Endpoints Accessible",
+      "success": false,
+      "duration": 6.102526903152466,
+      "message": "Failed endpoints: ['/api/auth (404)', '/api/secure-keys (404)', '/api/secure-mcp (404)']",
+      "details": {
+        "/health": 200,
+        "/api/test": 200,
+        "/api/capabilities": 200,
+        "/api/mcp": 200,
+        "/api/keys?user_id=test": 200,
+        "/api/supabase-config": 200,
+        "/api/azure-devops": 200,
+        "/api/github": 200,
+        "/api/auth": 404,
+        "/api/secure-keys": 404,
+        "/api/secure-mcp": 404
+      },
+      "error": null
+    },
+    {
+      "test_name": "MCP JSON-RPC Protocol",
+      "success": true,
+      "duration": 0.5214598178863525,
+      "message": "JSON-RPC protocol working - 3 tools available",
+      "details": {
+        "tools_count": 3,
+        "call_result": {
+          "status": "success",
+          "message": "Work item 'Test Item' would be created",
+          "simulated": true,
+          "timestamp": "2025-09-20T15:30:18.821417",
+          "note": "This is a demo response. Real implementation requires API keys."
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "Azure DevOps Connection",
+      "success": true,
+      "duration": 0.7873332500457764,
+      "message": "Connected to project: MCPTest",
+      "details": {
+        "id": "bef90b5b-8996-49cd-a9ac-8893a4ca7677",
+        "name": "MCPTest",
+        "description": null,
+        "state": "wellFormed"
+      },
+      "error": null
+    },
+    {
+      "test_name": "GitHub Connection",
+      "success": true,
+      "duration": 0.3608248233795166,
+      "message": "Connected to repository: Jita81/ADOMCP",
+      "details": {
+        "id": 1060041082,
+        "name": "ADOMCP",
+        "full_name": "Jita81/ADOMCP",
+        "description": null,
+        "private": false,
+        "default_branch": "main",
+        "html_url": "https://github.com/Jita81/ADOMCP"
+      },
+      "error": null
+    },
+    {
+      "test_name": "Azure DevOps Work Item CRUD",
+      "success": true,
+      "duration": 1.5177841186523438,
+      "message": "CRUD operations successful on work item 75",
+      "details": {
+        "work_item_id": 75,
+        "create": {
+          "id": 75,
+          "title": "Regression Test Work Item - 2025-09-20 16:30:23",
+          "type": "User Story",
+          "state": "New",
+          "url": "https://dev.azure.com/GenerativeAILab/bef90b5b-8996-49cd-a9ac-8893a4ca7677/_apis/wit/workItems/75"
+        },
+        "read": {
+          "id": 75,
+          "title": "Regression Test Work Item - 2025-09-20 16:30:23",
+          "description": "This work item was created during regression testing to verify CRUD operations.",
+          "type": "User Story",
+          "state": "New",
+          "assignee": null,
+          "created_date": "2025-09-20T15:30:23.597Z",
+          "changed_date": "2025-09-20T15:30:23.597Z",
+          "url": "https://dev.azure.com/GenerativeAILab/bef90b5b-8996-49cd-a9ac-8893a4ca7677/_apis/wit/workItems/75"
+        },
+        "update": {
+          "id": 75,
+          "title": "Regression Test Work Item - 2025-09-20 16:30:23",
+          "type": "User Story",
+          "state": "Active",
+          "revision": 2,
+          "url": "https://dev.azure.com/GenerativeAILab/bef90b5b-8996-49cd-a9ac-8893a4ca7677/_apis/wit/workItems/75"
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "GitHub Issue Creation",
+      "success": true,
+      "duration": 0.5371708869934082,
+      "message": "Created GitHub issue #9",
+      "details": {
+        "id": 3437244317,
+        "number": 9,
+        "title": "Regression Test Issue - 2025-09-20 16:30:25",
+        "state": "open",
+        "html_url": "https://github.com/Jita81/ADOMCP/issues/9",
+        "created_at": "2025-09-20T15:30:25Z"
+      },
+      "error": null
+    },
+    {
+      "test_name": "API Key Management",
+      "success": true,
+      "duration": 0.48506689071655273,
+      "message": "API key management working",
+      "details": {
+        "get": {
+          "user_id": "regression-test-user-123",
+          "stored_platforms": [
+            "azure_devops",
+            "github"
+          ],
+          "message": "API key storage is ready. Use POST to store keys.",
+          "timestamp": "2025-09-20T15:30:27.315754",
+          "note": "Actual keys are stored securely and not returned in GET requests"
+        },
+        "post": {
+          "status": "success",
+          "message": "API key for azure_devops stored securely",
+          "user_id": "regression-test-user-123",
+          "platform": "azure_devops",
+          "metadata": {
+            "organization_url": "https://dev.azure.com/GenerativeAILab",
+            "project_id": "test-project"
+          },
+          "timestamp": "2025-09-20T15:30:27.539695",
+          "note": "This is a simulated response. Real implementation would use Supabase."
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "Supabase Configuration",
+      "success": true,
+      "duration": 0.5195803642272949,
+      "message": "Supabase configuration endpoints working",
+      "details": {
+        "config": {
+          "service": "Supabase Configuration",
+          "timestamp": "2025-09-20T15:30:28.801966",
+          "environment_status": {
+            "SUPABASE_URL": "missing",
+            "SUPABASE_ANON_KEY": "missing",
+            "SUPABASE_SERVICE_KEY": "missing"
+          },
+          "database_ready": false,
+          "required_tables": [
+            "api_keys"
+          ],
+          "setup_instructions": {
+            "1": "Create Supabase project at https://supabase.com",
+            "2": "Add environment variables to Vercel project settings",
+            "3": "Run database migrations",
+            "4": "Test connection"
+          }
+        },
+        "create": {
+          "status": "success",
+          "message": "Database schema creation simulated",
+          "tables_created": [
+            {
+              "name": "api_keys",
+              "columns": [
+                "id (UUID, primary key)",
+                "user_id (TEXT)",
+                "platform (TEXT)",
+                "api_key (TEXT, encrypted)",
+                "metadata (JSONB)",
+                "created_at (TIMESTAMPTZ)"
+              ]
+            }
+          ],
+          "policies_created": [
+            "Row Level Security enabled",
+            "User access policy (users can only see their own keys)"
+          ],
+          "timestamp": "2025-09-20T15:30:29.011950",
+          "note": "This is a simulation. Real implementation would use Supabase client."
+        }
+      },
+      "error": null
+    },
+    {
+      "test_name": "Authentication System",
+      "success": false,
+      "duration": 0.13605093955993652,
+      "message": "Authentication system test failed",
+      "details": null,
+      "error": "404 Client Error: Not Found for url: https://adomcp.vercel.app/api/auth"
+    },
+    {
+      "test_name": "Secure API Key Management",
+      "success": false,
+      "duration": 1.9073486328125e-06,
+      "message": "No ADOMCP API key available - authentication test may have failed",
+      "details": null,
+      "error": null
+    },
+    {
+      "test_name": "Secure MCP Protocol",
+      "success": false,
+      "duration": 4.0531158447265625e-06,
+      "message": "No ADOMCP API key available - authentication test may have failed",
+      "details": null,
+      "error": null
+    },
+    {
+      "test_name": "Security Features",
+      "success": false,
+      "duration": 1.1881210803985596,
+      "message": "Security features test failed",
+      "details": null,
+      "error": "Expecting value: line 1 column 1 (char 0)"
+    },
+    {
+      "test_name": "Legacy Endpoint Deprecation",
+      "success": true,
+      "duration": 0.7091047763824463,
+      "message": "All 3 legacy endpoints accessible (backward compatibility)",
+      "details": {
+        "test_results": [
+          [
+            "Legacy API key endpoint",
+            true
+          ],
+          [
+            "Legacy MCP endpoint",
+            true
+          ],
+          [
+            "Legacy MCP JSON-RPC",
+            true
+          ]
+        ],
+        "warning": "Legacy endpoints should be replaced with secure versions"
+      },
+      "error": null
+    },
+    {
+      "test_name": "Error Handling",
+      "success": true,
+      "duration": 0.7081429958343506,
+      "message": "All 3 error handling tests passed",
+      "details": {
+        "test_results": [
+          [
+            "Invalid JSON-RPC method",
+            true
+          ],
+          [
+            "Missing user_id validation",
+            true
+          ],
+          [
+            "Invalid platform validation",
+            true
+          ]
+        ]
+      },
+      "error": null
+    }
+  ]
+}
