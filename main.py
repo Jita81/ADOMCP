@@ -1507,6 +1507,22 @@ async def oauth_mcp_legacy():
     """Legacy OAuth MCP endpoint mapping"""
     return await oauth_mcp_get()
 
+# Root-level MCP endpoint (Claude might expect this path)
+@app.get("/mcp")
+async def mcp_root_get():
+    """Root-level MCP endpoint for Claude Desktop"""
+    return await mcp_get()
+
+@app.options("/mcp")
+async def mcp_root_options():
+    """Handle CORS preflight for root MCP endpoint"""
+    return await mcp_options()
+
+@app.post("/mcp")
+async def mcp_root_post(request: Request, response: Response):
+    """Root-level MCP endpoint for Claude Desktop"""
+    return await mcp_post(request, response)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
