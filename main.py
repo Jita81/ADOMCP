@@ -22,8 +22,13 @@ async def root():
         "message": "Vercel deployment successful!",
         "endpoints": {
             "health": "/health",
-            "capabilities": "/api/capabilities", 
-            "test": "/api/test"
+            "test": "/api/test",
+            "capabilities": "/api/capabilities",
+            "mcp": "/api/mcp"
+        },
+        "api_info": {
+            "note": "Each /api/* endpoint is a separate Vercel function",
+            "protocol": "REST + JSON-RPC 2.0 for MCP"
         },
         "docs": "/docs"
     })
@@ -36,49 +41,31 @@ async def health():
         "service": "Azure DevOps Multi-Platform MCP"
     })
 
-@app.get("/api/test")
-async def api_test():
+@app.get("/test")
+async def test_redirect():
+    """Redirect to API test endpoint"""
     return JSONResponse({
-        "test": "success",
-        "message": "External API access verified",
-        "timestamp": datetime.now().isoformat(),
-        "deployment": "vercel"
+        "message": "Use /api/test for the actual API test endpoint",
+        "redirect": "/api/test",
+        "timestamp": datetime.now().isoformat()
     })
 
-@app.get("/api/capabilities")
-async def get_capabilities():
+@app.get("/capabilities") 
+async def capabilities_redirect():
+    """Redirect to API capabilities endpoint"""
     return JSONResponse({
-        "tools": [
-            {
-                "name": "create_work_item",
-                "description": "Create a new work item in Azure DevOps, GitHub, or GitLab",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "platform": {"type": "string", "enum": ["azure_devops", "github", "gitlab"]},
-                        "title": {"type": "string"},
-                        "description": {"type": "string"},
-                        "work_item_type": {"type": "string"}
-                    },
-                    "required": ["platform", "title", "work_item_type"]
-                }
-            },
-            {
-                "name": "update_work_item", 
-                "description": "Update an existing work item",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "platform": {"type": "string", "enum": ["azure_devops", "github", "gitlab"]},
-                        "work_item_id": {"type": "integer"},
-                        "updates": {"type": "object"}
-                    },
-                    "required": ["platform", "work_item_id", "updates"]
-                }
-            }
-        ],
-        "resources": ["work_items", "attachments", "repositories"],
-        "version": "2.2.0"
+        "message": "Use /api/capabilities for the actual capabilities endpoint",
+        "redirect": "/api/capabilities", 
+        "timestamp": datetime.now().isoformat()
+    })
+
+@app.get("/mcp")
+async def mcp_redirect():
+    """Redirect to API MCP endpoint"""
+    return JSONResponse({
+        "message": "Use /api/mcp for the actual MCP endpoint",
+        "redirect": "/api/mcp",
+        "timestamp": datetime.now().isoformat()
     })
 
 # This is the FastAPI app that Vercel will use
