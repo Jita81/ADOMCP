@@ -3,7 +3,7 @@ ADOMCP - Railway Deployment Entry Point
 Unified FastAPI application for all MCP endpoints
 """
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -343,9 +343,40 @@ async def mcp_get():
         "deployment": "railway"
     }
 
+@app.options("/api/mcp")
+async def mcp_options():
+    """Handle CORS preflight requests for MCP endpoint"""
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
+
+@app.get("/api/mcp") 
+async def mcp_info():
+    """MCP server information endpoint"""
+    return {
+        "service": "ADOMCP MCP Server",
+        "protocol": "JSON-RPC 2.0",
+        "version": "1.0.0",
+        "capabilities": ["tools", "resources", "prompts"],
+        "status": "ready",
+        "endpoint": "/api/mcp",
+        "tools_count": 3,
+        "deployment": "railway"
+    }
+
 @app.post("/api/mcp")
-async def mcp_post(request: Request):
-    """MCP JSON-RPC 2.0 endpoint"""
+async def mcp_post(request: Request, response: Response):
+    """MCP JSON-RPC 2.0 endpoint with CORS support"""
+    # Add CORS headers for Claude Desktop compatibility
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     try:
         body = await request.json()
         
