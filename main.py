@@ -427,18 +427,198 @@ async def mcp_post(request: Request):
             tool_name = params.get("name")
             tool_arguments = params.get("arguments", {})
             
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Tool {tool_name} executed with arguments: {tool_arguments}"
-                        }
-                    ]
-                },
-                 "id": request_id
-             }
+            # Route to REAL tool implementations
+            if tool_name == "create_work_item":
+                # Call REAL Azure DevOps API
+                azure_request = {
+                    "operation": "create_work_item",
+                    "title": tool_arguments.get("title", "MCP Created Work Item"),
+                    "work_item_type": tool_arguments.get("work_item_type", "User Story"),
+                    "description": tool_arguments.get("description", "Created via MCP tool call"),
+                    "area_path": tool_arguments.get("area_path"),
+                    "iteration_path": tool_arguments.get("iteration_path"),
+                    "assigned_to": tool_arguments.get("assigned_to"),
+                    "tags": tool_arguments.get("tags"),
+                    "custom_fields": tool_arguments.get("custom_fields", {}),
+                    "test_pat_token": os.getenv("AZURE_DEVOPS_PAT")
+                }
+                
+                try:
+                    # Call our real Azure DevOps endpoint internally
+                    from fastapi import Request as InternalRequest
+                    import json
+                    
+                    # Create internal request 
+                    class MockRequest:
+                        def __init__(self, json_data):
+                            self._json = json_data
+                        async def json(self):
+                            return self._json
+                    
+                    mock_request = MockRequest(azure_request)
+                    result = await azure_devops_post(mock_request)
+                    
+                    if result.get("success"):
+                        result_text = f"✅ REAL: Work item '{azure_request['title']}' created successfully!"
+                        result_text += f"\n• Work Item ID: {result.get('work_item_id')}"
+                        result_text += f"\n• Type: {result.get('work_item_type')}"
+                        if result.get('work_item_url'):
+                            result_text += f"\n• URL: {result.get('work_item_url')}"
+                    else:
+                        result_text = f"❌ REAL: Failed to create work item: {result.get('message')}"
+                    
+                    return {
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": result_text
+                                }
+                            ]
+                        },
+                        "id": request_id
+                    }
+                except Exception as e:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32603,
+                            "message": f"Failed to create work item: {str(e)}"
+                        },
+                        "id": request_id
+                    }
+                    
+            elif tool_name == "update_work_item":
+                # Call REAL Azure DevOps update API
+                azure_request = {
+                    "operation": "update_work_item",
+                    "work_item_id": tool_arguments.get("work_item_id"),
+                    "updates": tool_arguments.get("updates", {}),
+                    "test_pat_token": os.getenv("AZURE_DEVOPS_PAT")
+                }
+                
+                if not azure_request["work_item_id"]:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32602,
+                            "message": "work_item_id is required for update_work_item"
+                        },
+                        "id": request_id
+                    }
+                
+                try:
+                    from fastapi import Request as InternalRequest
+                    import json
+                    
+                    class MockRequest:
+                        def __init__(self, json_data):
+                            self._json = json_data
+                        async def json(self):
+                            return self._json
+                    
+                    mock_request = MockRequest(azure_request)
+                    result = await azure_devops_post(mock_request)
+                    
+                    if result.get("success"):
+                        result_text = f"✅ REAL: Work item {azure_request['work_item_id']} updated successfully!"
+                        result_text += f"\n• Fields updated: {result.get('updates_applied', 0)}"
+                        if result.get('work_item_url'):
+                            result_text += f"\n• URL: {result.get('work_item_url')}"
+                    else:
+                        result_text = f"❌ REAL: Failed to update work item: {result.get('message')}"
+                    
+                    return {
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": result_text
+                                }
+                            ]
+                        },
+                        "id": request_id
+                    }
+                except Exception as e:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32603,
+                            "message": f"Failed to update work item: {str(e)}"
+                        },
+                        "id": request_id
+                    }
+                    
+            elif tool_name == "github_integration":
+                # Call REAL GitHub API via internal endpoint
+                github_request = {
+                    "operation": tool_arguments.get("action", "create_issue"),
+                    "repository": tool_arguments.get("repository", "Jita81/ADOMCP"),
+                    "title": tool_arguments.get("title", "MCP GitHub Integration"),
+                    "description": tool_arguments.get("description", "Created via MCP tool call"),
+                    "labels": tool_arguments.get("labels", []),
+                    "assignees": tool_arguments.get("assignees", [])
+                }
+                
+                try:
+                    from fastapi import Request as InternalRequest
+                    import json
+                    
+                    class MockRequest:
+                        def __init__(self, json_data):
+                            self._json = json_data
+                        async def json(self):
+                            return self._json
+                    
+                    mock_request = MockRequest(github_request)
+                    result = await github_post(mock_request)
+                    
+                    if result.get("success"):
+                        result_text = f"✅ GitHub {github_request['operation']} successful!"
+                        if result.get('issue_id'):
+                            result_text += f"\n• Issue ID: {result.get('issue_id')}"
+                        if result.get('issue_url'):
+                            result_text += f"\n• URL: {result.get('issue_url')}"
+                        result_text += f"\n• Repository: {github_request['repository']}"
+                    else:
+                        result_text = f"❌ GitHub operation failed: {result.get('message')}"
+                    
+                    return {
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text", 
+                                    "text": result_text
+                                }
+                            ]
+                        },
+                        "id": request_id
+                    }
+                except Exception as e:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32603,
+                            "message": f"Failed GitHub integration: {str(e)}"
+                        },
+                        "id": request_id
+                    }
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "result": {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Tool {tool_name} executed with arguments: {tool_arguments}"
+                            }
+                        ]
+                    },
+                     "id": request_id
+                 }
         elif method == "initialized":
             # Handle MCP initialized notification (no response needed)
             return {"jsonrpc": "2.0", "result": None, "id": request_id}
