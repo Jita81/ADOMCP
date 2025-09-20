@@ -214,7 +214,8 @@ class handler(BaseHTTPRequestHandler):
                 "value": field_value
             })
         
-        url = f"{organization_url}/{project}/_apis/wit/workitems/${work_item_type}?api-version=7.1"
+        encoded_work_item_type = urllib.parse.quote(work_item_type)
+        url = f"{organization_url}/{project}/_apis/wit/workitems/${encoded_work_item_type}?api-version=7.1"
         result = self._make_api_request(url, method='POST', data=patch_document, headers=headers)
         
         if result['success']:
