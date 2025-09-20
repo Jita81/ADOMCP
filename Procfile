@@ -1,1 +1,1 @@
-web: uvicorn main:app --host 0.0.0.0 --port $PORT
+web: python server_mcp_compliant.py --port $PORT --log-level INFO

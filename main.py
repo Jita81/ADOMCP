@@ -1,1528 +1,514 @@
+#!/usr/bin/env python3
 """
-ADOMCP - Railway Deployment Entry Point
-Unified FastAPI application for all MCP endpoints
+ADOMCP - Azure DevOps MCP Server (Official SDK Compliant)
+
+A fully compliant Model Context Protocol server for Azure DevOps and GitHub integration,
+built using the official MCP Python SDK patterns and supporting StreamableHTTP transport
+for Claude Desktop compatibility.
 """
 
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 import os
-import sys
-import importlib.util
-import traceback
-import secrets
-from datetime import datetime
+import logging
+import contextlib
+from collections.abc import AsyncIterator
+from typing import Any
 import json
-import asyncio
-from typing import AsyncGenerator
+import base64
 
-app = FastAPI(
-    title="ADOMCP - Azure DevOps MCP Server",
-    description="Advanced security-enabled MCP server for Azure DevOps, GitHub, and GitLab integration",
-    version="2.0.0"
-)
+import anyio
+import click
+import aiohttp
+import mcp.types as types
+from mcp.server.lowlevel import Server
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from starlette.applications import Starlette
+from starlette.middleware.cors import CORSMiddleware
+from starlette.routing import Mount
+from starlette.types import Receive, Scope, Send
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
-# Add security module to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-def load_api_handler(module_name: str):
-    """Load an API handler from the api directory"""
-    try:
-        module_path = f"api/{module_name}.py"
-        if not os.path.exists(module_path):
-            return None
-            
-        spec = importlib.util.spec_from_file_location(module_name, module_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        
-        if hasattr(module, 'handler'):
-            return module.handler
-        return None
-    except Exception as e:
-        print(f"Error loading {module_name}: {e}")
-        return None
-
-# Root endpoint
-@app.get("/")
-async def root():
-    return {
-        "service": "ADOMCP - Azure DevOps MCP Server",
-        "version": "2.0.0",
-        "status": "operational",
-        "deployment": "railway",
-        "timestamp": datetime.now().isoformat(),
-        "endpoints": {
-            "authentication": "/auth",
-            "oauth": "/oauth", 
-            "secure_keys": "/secure-keys",
-            "secure_mcp": "/secure-mcp",
-            "oauth_mcp": "/oauth-mcp",
-            "azure_devops": "/azure-devops",
-            "github": "/github",
-            "capabilities": "/capabilities",
-            "mcp": "/mcp",
-            "mcp_sse": "/mcp/sse"
-        },
-        "mcp_transports": {
-            "http_json_rpc": "/api/mcp",
-            "sse_streaming": "/api/mcp/sse"
-        }
-    }
-
-# Health check
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "deployment": "railway"
-    }
-
-# FastAPI wrapper for existing BaseHTTPRequestHandler endpoints
-import io
-from fastapi.responses import Response
-
-class MockBaseRequestHandler:
-    """Mock BaseHTTPRequestHandler for FastAPI integration"""
-    def __init__(self, path: str, method: str, body: bytes = b"", headers: dict = None):
-        self.path = path
-        self.command = method
-        self.rfile = io.BytesIO(body)
-        self.headers = headers or {}
-        self.response_status = 200
-        self.response_headers = {}
-        self.response_body = ""
-        
-    def send_response(self, code):
-        self.response_status = code
-        
-    def send_header(self, keyword, value):
-        self.response_headers[keyword] = value
-        
-    def end_headers(self):
-        pass
-        
-    def wfile_write(self, data):
-        if isinstance(data, bytes):
-            self.response_body = data.decode('utf-8')
-        else:
-            self.response_body = str(data)
-
-async def handle_api_endpoint(endpoint: str, request: Request):
-    """Generic handler for all API endpoints"""
-    try:
-        # Load the appropriate handler
-        handler_class = load_api_handler(endpoint.replace('-', '_'))
-        if not handler_class:
-            raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} not found")
-        
-        # Get request details
-        body = await request.body()
-        
-        # Create mock handler
-        mock_handler = MockBaseRequestHandler(
-            path=f"/api/{endpoint}",
-            method=request.method,
-            body=body,
-            headers=dict(request.headers)
-        )
-        
-        # Override wfile.write to capture response
-        original_write = mock_handler.wfile_write
-        response_data = []
-        
-        def capture_write(data):
-            response_data.append(data)
-            original_write(data)
-            
-        # Create actual handler instance
-        actual_handler = handler_class()
-        
-        # Copy mock properties to actual handler
-        actual_handler.path = mock_handler.path
-        actual_handler.command = mock_handler.command
-        actual_handler.rfile = mock_handler.rfile
-        actual_handler.headers = mock_handler.headers
-        actual_handler.send_response = mock_handler.send_response
-        actual_handler.send_header = mock_handler.send_header
-        actual_handler.end_headers = mock_handler.end_headers
-        
-        # Override wfile.write
-        actual_handler.wfile = type('MockFile', (), {
-            'write': lambda self, data: response_data.append(data)
-        })()
-        
-        # Call the appropriate method
-        if request.method == "GET" and hasattr(actual_handler, 'do_GET'):
-            actual_handler.do_GET()
-        elif request.method == "POST" and hasattr(actual_handler, 'do_POST'):
-            actual_handler.do_POST()
-        elif request.method == "PUT" and hasattr(actual_handler, 'do_PUT'):
-            actual_handler.do_PUT()
-        elif request.method == "DELETE" and hasattr(actual_handler, 'do_DELETE'):
-            actual_handler.do_DELETE()
-        else:
-            raise HTTPException(status_code=405, detail="Method not allowed")
-        
-        # Combine response data
-        if response_data:
-            response_body = b''.join(d if isinstance(d, bytes) else str(d).encode() for d in response_data)
-        else:
-            response_body = mock_handler.response_body.encode() if mock_handler.response_body else b'{"status": "processed"}'
-        
-        # Return response
-        return Response(
-            content=response_body,
-            status_code=mock_handler.response_status,
-            headers=mock_handler.response_headers,
-            media_type="application/json"
-        )
-        
-    except Exception as e:
-        print(f"Error in API handler for {endpoint}: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Simplified authentication endpoints that bypass BaseHTTPRequestHandler
-@app.get("/api/oauth")
-async def oauth_get():
-    """OAuth authentication info endpoint"""
-    try:
-        # Import OAuth functionality directly
-        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-        from security.oauth import get_oauth_providers
-        
-        providers = get_oauth_providers()
-        return {
-            "service": "ADOMCP OAuth Service",
-            "status": "operational",
-            "providers": list(providers.keys()),
-            "endpoints": {
-                "login": "/api/oauth/login",
-                "callback": "/api/oauth/callback", 
-                "status": "/api/oauth/status"
-            },
-            "description": "OAuth authentication for ADOMCP",
-            "deployment": "railway"
-        }
-    except Exception as e:
-        return {
-            "service": "ADOMCP OAuth Service",
-            "status": "operational", 
-            "providers": ["github", "google", "microsoft"],
-            "note": "OAuth providers configured",
-            "deployment": "railway"
-        }
-
-@app.get("/api/auth")  
-async def auth_get():
-    """User authentication/registration info endpoint"""
-    return {
-        "service": "ADOMCP Authentication Service",
-        "status": "operational",
-        "authentication_required": True,
-        "registration": {
-            "method": "POST",
-            "endpoint": "/api/auth",
-            "required_fields": ["email"],
-            "returns": "ADOMCP API key"
-        },
-        "description": "User registration and API key generation",
-        "deployment": "railway"
-    }
-
-@app.post("/api/auth")
-async def auth_register(request: Request):
-    """User registration endpoint"""
-    try:
-        body = await request.json()
-        email = body.get("email")
-        purpose = body.get("purpose", "API access")
-        
-        if not email:
-            raise HTTPException(status_code=400, detail="Email required")
-        
-        # Validate email format
-        import re
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, email):
-            raise HTTPException(status_code=400, detail="Invalid email format")
-            
-        # Generate API key (simulation mode for now)
-        api_key = f"adomcp_v1_{secrets.token_urlsafe(32)}"
-        
-        return {
-            "status": "success",
-            "message": "User registered successfully",
-            "api_key": api_key,
-            "email": email,
-            "scopes": ["read", "write", "admin"],
-            "timestamp": datetime.now().isoformat(),
-            "purpose": purpose
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": "Registration failed",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-@app.get("/api/secure-keys")
-async def secure_keys_get():
-    """Secure API key management info"""
-    return {
-        "service": "ADOMCP Secure Key Management",
-        "status": "operational",
-        "authentication_required": True,
-        "supported_platforms": ["azure-devops", "github", "gitlab"],
-        "operations": ["store", "retrieve", "list", "delete"],
-        "description": "Secure storage and management of platform API keys",
-        "deployment": "railway"
-    }
-
-@app.get("/api/secure-mcp")
-async def secure_mcp_get():
-    """Secure MCP JSON-RPC info endpoint"""
-    return {
-        "service": "ADOMCP Secure MCP",
-        "status": "operational",
-        "protocol": "JSON-RPC 2.0",
-        "authentication_required": True,
-        "tools": [
-            "create_work_item",
-            "update_work_item", 
-            "manage_relationships",
-            "manage_attachments",
-            "link_development_artifacts"
-        ],
-        "description": "Authenticated MCP operations for work item management",
-        "deployment": "railway"
-    }
-
-@app.get("/api/oauth-mcp")  
-async def oauth_mcp_get():
-    """OAuth-protected MCP info endpoint"""
-    return {
-        "service": "ADOMCP OAuth MCP",
-        "status": "operational",
-        "protocol": "JSON-RPC 2.0", 
-        "authentication": "OAuth (GitHub, Google, Microsoft)",
-        "tools": [
-            "create_work_item",
-            "update_work_item",
-            "github_integration", 
-            "azure_devops_integration"
-        ],
-        "description": "OAuth-protected MCP operations",
-        "deployment": "railway"
-    }
-
-# Core MCP endpoints - Direct implementations
-@app.get("/api/mcp")
-async def mcp_get():
-    """Core MCP endpoint info"""
-    return {
-        "service": "ADOMCP Core MCP",
-        "protocol": "JSON-RPC 2.0",
-        "version": "2.0.0",
-        "status": "operational",
-        "capabilities": ["tools", "resources", "prompts"],
-        "tools": [
-            "create_work_item",
-            "update_work_item", 
-            "manage_relationships",
-            "manage_attachments",
-            "github_integration"
-        ],
-        "deployment": "railway"
-    }
-
-@app.options("/api/mcp")
-async def mcp_options():
-    """Handle CORS preflight requests for MCP endpoint"""
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Max-Age": "86400"
-        }
-    )
-
-@app.get("/api/mcp") 
-async def mcp_info():
-    """MCP server information endpoint"""
-    return {
-        "service": "ADOMCP MCP Server",
-        "protocol": "JSON-RPC 2.0",
-        "version": "1.0.0",
-        "capabilities": ["tools", "resources", "prompts"],
-        "status": "ready",
-        "endpoint": "/api/mcp",
-        "tools_count": 3,
-        "deployment": "railway"
-    }
-
-@app.post("/api/mcp")
-async def mcp_post(request: Request, response: Response):
-    """MCP JSON-RPC 2.0 endpoint with CORS support"""
-    # Add CORS headers for Claude Desktop compatibility
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    try:
-        body = await request.json()
-        
-        # Basic JSON-RPC validation
-        if not body.get("jsonrpc") == "2.0":
-            raise HTTPException(status_code=400, detail="Invalid JSON-RPC version")
-        
-        method = body.get("method")
-        params = body.get("params", {})
-        request_id = body.get("id")
-        
-        # Handle different MCP methods
-        if method == "initialize":
-            # Handle MCP initialization handshake - following MCP specification
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {
-                            "listChanged": True
-                        },
-                        "resources": {
-                            "subscribe": True,
-                            "listChanged": True
-                        },
-                        "prompts": {
-                            "listChanged": True
-                        },
-                        "logging": {}
-                    },
-                    "serverInfo": {
-                        "name": "ADOMCP",
-                        "version": "1.0.0"
-                    }
-                },
-                "id": request_id
-            }
-        elif method == "tools/list":
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "tools": [
-                        {
-                            "name": "create_work_item",
-                            "description": "Create a new work item in Azure DevOps",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "title": {
-                                        "type": "string",
-                                        "description": "Title of the work item"
-                                    },
-                                    "work_item_type": {
-                                        "type": "string",
-                                        "description": "Type of work item (User Story, Bug, Task, etc.)",
-                                        "default": "User Story"
-                                    },
-                                    "description": {
-                                        "type": "string",
-                                        "description": "Detailed description of the work item"
-                                    },
-                                    "area_path": {
-                                        "type": "string",
-                                        "description": "Area path for the work item"
-                                    },
-                                    "iteration_path": {
-                                        "type": "string", 
-                                        "description": "Iteration path for the work item"
-                                    },
-                                    "assigned_to": {
-                                        "type": "string",
-                                        "description": "Email of user to assign the work item to"
-                                    },
-                                    "tags": {
-                                        "type": "string",
-                                        "description": "Tags for the work item (semicolon separated)"
-                                    }
-                                },
-                                "required": ["title"]
-                            }
-                        },
-                        {
-                            "name": "update_work_item", 
-                            "description": "Update an existing work item in Azure DevOps",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "work_item_id": {
-                                        "type": "integer",
-                                        "description": "ID of the work item to update"
-                                    },
-                                    "updates": {
-                                        "type": "object",
-                                        "description": "Fields to update (e.g., {'System.Title': 'New Title', 'System.State': 'Active'})"
-                                    }
-                                },
-                                "required": ["work_item_id", "updates"]
-                            }
-                        },
-                        {
-                            "name": "github_integration",
-                            "description": "Integrate with GitHub repositories and issues", 
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "action": {
-                                        "type": "string",
-                                        "description": "Action to perform (create_issue, list_repositories, get_commits)"
-                                    },
-                                    "repository": {
-                                        "type": "string",
-                                        "description": "Repository in format 'owner/repo'",
-                                        "default": "Jita81/ADOMCP"
-                                    },
-                                    "title": {
-                                        "type": "string",
-                                        "description": "Title for new issue (when action=create_issue)"
-                                    },
-                                    "description": {
-                                        "type": "string",
-                                        "description": "Description for new issue (when action=create_issue)"
-                                    }
-                                },
-                                "required": ["action"]
-                            }
-                        }
-                    ]
-                },
-                "id": request_id
-            }
-        elif method == "tools/call":
-            tool_name = params.get("name")
-            tool_arguments = params.get("arguments", {})
-            
-            # Route to REAL tool implementations
-            if tool_name == "create_work_item":
-                # Call REAL Azure DevOps API
-                azure_request = {
-                    "operation": "create_work_item",
-                    "title": tool_arguments.get("title", "MCP Created Work Item"),
-                    "work_item_type": tool_arguments.get("work_item_type", "User Story"),
-                    "description": tool_arguments.get("description", "Created via MCP tool call"),
-                    "area_path": tool_arguments.get("area_path"),
-                    "iteration_path": tool_arguments.get("iteration_path"),
-                    "assigned_to": tool_arguments.get("assigned_to"),
-                    "tags": tool_arguments.get("tags"),
-                    "custom_fields": tool_arguments.get("custom_fields", {}),
-                    "test_pat_token": os.getenv("AZURE_DEVOPS_PAT")
-                }
-                
-                try:
-                    # Call our real Azure DevOps endpoint internally
-                    from fastapi import Request as InternalRequest
-                    import json
-                    
-                    # Create internal request 
-                    class MockRequest:
-                        def __init__(self, json_data):
-                            self._json = json_data
-                        async def json(self):
-                            return self._json
-                    
-                    mock_request = MockRequest(azure_request)
-                    result = await azure_devops_post(mock_request)
-                    
-                    if result.get("success"):
-                        result_text = f"✅ REAL: Work item '{azure_request['title']}' created successfully!"
-                        result_text += f"\n• Work Item ID: {result.get('work_item_id')}"
-                        result_text += f"\n• Type: {result.get('work_item_type')}"
-                        if result.get('work_item_url'):
-                            result_text += f"\n• URL: {result.get('work_item_url')}"
-                    else:
-                        result_text = f"❌ REAL: Failed to create work item: {result.get('message')}"
-                    
-                    return {
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": result_text
-                                }
-                            ]
-                        },
-                        "id": request_id
-                    }
-                except Exception as e:
-                    return {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32603,
-                            "message": f"Failed to create work item: {str(e)}"
-                        },
-                        "id": request_id
-                    }
-                    
-            elif tool_name == "update_work_item":
-                # Call REAL Azure DevOps update API
-                azure_request = {
-                    "operation": "update_work_item",
-                    "work_item_id": tool_arguments.get("work_item_id"),
-                    "updates": tool_arguments.get("updates", {}),
-                    "test_pat_token": os.getenv("AZURE_DEVOPS_PAT")
-                }
-                
-                if not azure_request["work_item_id"]:
-                    return {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32602,
-                            "message": "work_item_id is required for update_work_item"
-                        },
-                        "id": request_id
-                    }
-                
-                try:
-                    from fastapi import Request as InternalRequest
-                    import json
-                    
-                    class MockRequest:
-                        def __init__(self, json_data):
-                            self._json = json_data
-                        async def json(self):
-                            return self._json
-                    
-                    mock_request = MockRequest(azure_request)
-                    result = await azure_devops_post(mock_request)
-                    
-                    if result.get("success"):
-                        result_text = f"✅ REAL: Work item {azure_request['work_item_id']} updated successfully!"
-                        result_text += f"\n• Fields updated: {result.get('updates_applied', 0)}"
-                        if result.get('work_item_url'):
-                            result_text += f"\n• URL: {result.get('work_item_url')}"
-                    else:
-                        result_text = f"❌ REAL: Failed to update work item: {result.get('message')}"
-                    
-                    return {
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": result_text
-                                }
-                            ]
-                        },
-                        "id": request_id
-                    }
-                except Exception as e:
-                    return {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32603,
-                            "message": f"Failed to update work item: {str(e)}"
-                        },
-                        "id": request_id
-                    }
-                    
-            elif tool_name == "github_integration":
-                # Call REAL GitHub API via internal endpoint
-                github_request = {
-                    "operation": tool_arguments.get("action", "create_issue"),
-                    "repository": tool_arguments.get("repository", "Jita81/ADOMCP"),
-                    "title": tool_arguments.get("title", "MCP GitHub Integration"),
-                    "description": tool_arguments.get("description", "Created via MCP tool call"),
-                    "labels": tool_arguments.get("labels", []),
-                    "assignees": tool_arguments.get("assignees", [])
-                }
-                
-                try:
-                    from fastapi import Request as InternalRequest
-                    import json
-                    
-                    class MockRequest:
-                        def __init__(self, json_data):
-                            self._json = json_data
-                        async def json(self):
-                            return self._json
-                    
-                    mock_request = MockRequest(github_request)
-                    result = await github_post(mock_request)
-                    
-                    if result.get("success"):
-                        result_text = f"✅ GitHub {github_request['operation']} successful!"
-                        if result.get('issue_id'):
-                            result_text += f"\n• Issue ID: {result.get('issue_id')}"
-                        if result.get('issue_url'):
-                            result_text += f"\n• URL: {result.get('issue_url')}"
-                        result_text += f"\n• Repository: {github_request['repository']}"
-                    else:
-                        result_text = f"❌ GitHub operation failed: {result.get('message')}"
-                    
-                    return {
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text", 
-                                    "text": result_text
-                                }
-                            ]
-                        },
-                        "id": request_id
-                    }
-                except Exception as e:
-                    return {
-                        "jsonrpc": "2.0",
-                        "error": {
-                            "code": -32603,
-                            "message": f"Failed GitHub integration: {str(e)}"
-                        },
-                        "id": request_id
-                    }
-            else:
-                return {
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"Tool {tool_name} executed with arguments: {tool_arguments}"
-                            }
-                        ]
-                    },
-                     "id": request_id
-                 }
-        elif method == "initialized":
-            # Handle MCP initialized notification (no response needed)
-            return {"jsonrpc": "2.0", "result": {}, "id": request_id}
-        elif method == "notifications/initialized":
-            # MCP initialized notification - no response required for notifications
-            return None
-        elif method == "ping":
-            # Handle ping requests
-            return {"jsonrpc": "2.0", "result": {}, "id": request_id}
-        elif method == "resources/list":
-            # Handle resources list (we don't have resources yet)
-            return {
-                "jsonrpc": "2.0", 
-                "result": {
-                    "resources": []
-                },
-                "id": request_id
-            }
-        elif method == "prompts/list":
-            # Handle prompts list (we don't have prompts yet)
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "prompts": []
-                },
-                "id": request_id
-            }
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown method: {method}")
-            
-    except Exception as e:
-        return {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": "Internal error",
-                "data": str(e)
-            },
-            "id": body.get("id") if 'body' in locals() else None
-        }
-
-# SSE MCP Endpoint for Claude Desktop Compatibility
-async def mcp_message_generator(request_queue: asyncio.Queue) -> AsyncGenerator[str, None]:
-    """Generate SSE messages for MCP protocol"""
-    try:
-        while True:
-            # Wait for messages from the queue
-            message = await asyncio.wait_for(request_queue.get(), timeout=30.0)
-            
-            if message is None:  # Shutdown signal
-                break
-                
-            # Process MCP message
-            response = await process_mcp_message(message)
-            
-            if response:
-                # Format as SSE event
-                event_data = json.dumps(response)
-                yield f"data: {event_data}\n\n"
-                
-    except asyncio.TimeoutError:
-        # Send keepalive ping
-        ping_response = {
-            "jsonrpc": "2.0",
-            "method": "notifications/ping",
-            "params": {}
-        }
-        yield f"data: {json.dumps(ping_response)}\n\n"
-    except Exception as e:
-        error_response = {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": f"SSE error: {str(e)}"
-            }
-        }
-        yield f"data: {json.dumps(error_response)}\n\n"
-
-async def process_mcp_message(message: dict) -> dict:
-    """Process MCP message and return response (shared logic with HTTP endpoint)"""
-    try:
-        method = message.get("method")
-        params = message.get("params", {})
-        request_id = message.get("id")
-        
-        # Use the same logic as the HTTP POST endpoint
-        if method == "initialize":
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {
-                            "listChanged": True
-                        },
-                        "resources": {
-                            "subscribe": True,
-                            "listChanged": True
-                        },
-                        "prompts": {
-                            "listChanged": True
-                        },
-                        "logging": {}
-                    },
-                    "serverInfo": {
-                        "name": "ADOMCP",
-                        "version": "1.0.0"
-                    }
-                },
-                "id": request_id
-            }
-        elif method == "tools/list":
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "tools": [
-                        {
-                            "name": "create_work_item",
-                            "description": "Create a new work item in Azure DevOps",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "title": {
-                                        "type": "string",
-                                        "description": "Title of the work item"
-                                    },
-                                    "work_item_type": {
-                                        "type": "string",
-                                        "description": "Type of work item (User Story, Bug, Task, etc.)",
-                                        "default": "User Story"
-                                    },
-                                    "description": {
-                                        "type": "string",
-                                        "description": "Detailed description of the work item"
-                                    },
-                                    "area_path": {
-                                        "type": "string",
-                                        "description": "Area path for the work item"
-                                    },
-                                    "iteration_path": {
-                                        "type": "string", 
-                                        "description": "Iteration path for the work item"
-                                    },
-                                    "assigned_to": {
-                                        "type": "string",
-                                        "description": "Email of user to assign the work item to"
-                                    },
-                                    "tags": {
-                                        "type": "string",
-                                        "description": "Tags for the work item (semicolon separated)"
-                                    }
-                                },
-                                "required": ["title"]
-                            }
-                        },
-                        {
-                            "name": "update_work_item", 
-                            "description": "Update an existing work item in Azure DevOps",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "work_item_id": {
-                                        "type": "integer",
-                                        "description": "ID of the work item to update"
-                                    },
-                                    "updates": {
-                                        "type": "object",
-                                        "description": "Fields to update (e.g., {'System.Title': 'New Title', 'System.State': 'Active'})"
-                                    }
-                                },
-                                "required": ["work_item_id", "updates"]
-                            }
-                        },
-                        {
-                            "name": "github_integration",
-                            "description": "Integrate with GitHub repositories and issues", 
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "action": {
-                                        "type": "string",
-                                        "description": "Action to perform (create_issue, list_repositories, get_commits)"
-                                    },
-                                    "repository": {
-                                        "type": "string",
-                                        "description": "Repository in format 'owner/repo'",
-                                        "default": "Jita81/ADOMCP"
-                                    },
-                                    "title": {
-                                        "type": "string",
-                                        "description": "Title for new issue (when action=create_issue)"
-                                    },
-                                    "description": {
-                                        "type": "string",
-                                        "description": "Description for new issue (when action=create_issue)"
-                                    }
-                                },
-                                "required": ["action"]
-                            }
-                        }
-                    ]
-                },
-                "id": request_id
-            }
-        elif method == "tools/call":
-            # For SSE, we'll simulate tool execution for now
-            # This would need to be connected to the real implementations
-            tool_name = params.get("name")
-            tool_arguments = params.get("arguments", {})
-            
-            if tool_name == "create_work_item":
-                # Simulate Azure DevOps work item creation in SSE
-                result_text = f"✅ SSE: Work item '{tool_arguments.get('title', 'SSE Test Item')}' would be created"
-                result_text += f"\n• Type: {tool_arguments.get('work_item_type', 'User Story')}"
-                result_text += f"\n• Via SSE transport"
-                
-                return {
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": result_text
-                            }
-                        ]
-                    },
-                    "id": request_id
-                }
-            elif tool_name == "github_integration":
-                result_text = f"✅ SSE: GitHub {tool_arguments.get('action', 'action')} executed via SSE"
-                result_text += f"\n• Repository: {tool_arguments.get('repository', 'Jita81/ADOMCP')}"
-                
-                return {
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": result_text
-                            }
-                        ]
-                    },
-                    "id": request_id
-                }
-            else:
-                return {
-                    "jsonrpc": "2.0",
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"SSE: Tool {tool_name} executed with arguments: {tool_arguments}"
-                            }
-                        ]
-                    },
-                    "id": request_id
-                }
-        elif method == "ping":
-            return {"jsonrpc": "2.0", "result": {}, "id": request_id}
-        elif method == "resources/list":
-            return {
-                "jsonrpc": "2.0", 
-                "result": {
-                    "resources": []
-                },
-                "id": request_id
-            }
-        elif method == "prompts/list":
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "prompts": []
-                },
-                "id": request_id
-            }
-        elif method == "notifications/initialized":
-            # No response needed for notifications
-            return None
-        else:
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32601,
-                    "message": f"Method not found: {method}"
-                },
-                "id": request_id
-            }
-    except Exception as e:
-        return {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": f"Internal error: {str(e)}"
-            },
-            "id": message.get("id")
-        }
-
-@app.get("/api/mcp/sse")
-async def mcp_sse_endpoint(request: Request):
-    """SSE endpoint for MCP protocol (Claude Desktop compatible)"""
+# Azure DevOps and GitHub API integration functions
+class AzureDevOpsAPI:
+    """Azure DevOps API client for work item operations"""
     
-    async def event_stream():
-        # Send initial connection confirmation
-        yield "data: " + json.dumps({
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized",
-            "params": {
-                "serverInfo": {
-                    "name": "ADOMCP",
-                    "version": "1.0.0"
-                },
-                "capabilities": {
-                    "tools": {"listChanged": True},
-                    "resources": {"subscribe": True, "listChanged": True},
-                    "prompts": {"listChanged": True}
-                }
-            }
-        }) + "\n\n"
+    def __init__(self, pat_token: str, organization: str = "GenerativeAILab", project: str = "MCPTest"):
+        self.pat_token = pat_token
+        self.organization = organization
+        self.project = project
+        self.base_url = f"https://dev.azure.com/{organization}/{project}/_apis"
         
-        # Keep connection alive and handle incoming messages
+    async def create_work_item(self, title: str, work_item_type: str = "User Story", 
+                             description: str = "", **kwargs) -> dict[str, Any]:
+        """Create a new work item in Azure DevOps"""
         try:
-            while True:
-                # Send periodic keepalive
-                await asyncio.sleep(10)
-                yield "data: " + json.dumps({
-                    "jsonrpc": "2.0", 
-                    "method": "notifications/ping",
-                    "params": {}
-                }) + "\n\n"
-                
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            yield "data: " + json.dumps({
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": f"SSE connection error: {str(e)}"
-                }
-            }) + "\n\n"
-    
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization"
-        }
-    )
-
-@app.post("/api/mcp/sse")
-async def mcp_sse_post(request: Request):
-    """Handle POST requests to SSE endpoint for bidirectional communication"""
-    try:
-        body = await request.json()
-        response = await process_mcp_message(body)
-        
-        if response:
-            return response
-        else:
-            return {"jsonrpc": "2.0", "result": {}, "id": body.get("id")}
-            
-    except Exception as e:
-        return {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": f"SSE POST error: {str(e)}"
-            },
-            "id": body.get("id") if 'body' in locals() else None
-        }
-
-@app.get("/api/capabilities")
-async def capabilities_get():
-    """MCP capabilities endpoint"""
-    return {
-        "service": "ADOMCP Capabilities",
-        "status": "operational",
-        "protocol": "JSON-RPC 2.0",
-        "capabilities": {
-            "tools": True,
-            "resources": True,
-            "prompts": False
-        },
-        "tools": [
-            "create_work_item",
-            "update_work_item", 
-            "manage_relationships",
-            "manage_attachments",
-            "github_integration"
-        ],
-        "resources": ["azure-devops", "github", "gitlab"],
-        "deployment": "railway"
-    }
-
-@app.get("/api/azure-devops")
-async def azure_devops_get():
-    """Azure DevOps integration info"""
-    return {
-        "service": "Azure DevOps Integration",
-        "status": "operational",
-        "operations": ["work_items", "projects", "attachments", "relationships"],
-        "authentication": "PAT token required",
-        "supported_work_item_types": ["User Story", "Task", "Bug", "Feature", "Epic"],
-        "endpoints": {
-            "projects": "/api/azure-devops/projects",
-            "work_items": "/api/azure-devops/work-items",
-            "attachments": "/api/azure-devops/attachments"
-        },
-        "deployment": "railway"
-    }
-
-@app.post("/api/azure-devops")
-async def azure_devops_post(request: Request):
-    """Azure DevOps operations with REAL API integration"""
-    import base64
-    import requests as http_requests
-    import urllib.parse
-    
-    try:
-        body = await request.json()
-        operation = body.get("operation")
-        
-        # Get credentials from request or environment variables
-        organization_url = body.get("organization_url", os.getenv("AZURE_DEVOPS_ORGANIZATION_URL", "https://dev.azure.com/GenerativeAILab"))
-        pat_token = body.get("pat_token") or body.get("test_pat_token") or os.getenv("AZURE_DEVOPS_PAT")
-        project_id = body.get("project_id", os.getenv("AZURE_DEVOPS_PROJECT_ID", "bef90b5b-8996-49cd-a9ac-8893a4ca7677"))
-        
-        if not pat_token:
-            return {
-                "success": False,
-                "message": "Azure DevOps PAT token required. Provide via 'pat_token' or 'test_pat_token' parameter, or set AZURE_DEVOPS_PAT environment variable."
+            auth_header = base64.b64encode(f":{self.pat_token}".encode()).decode()
+            headers = {
+                "Authorization": f"Basic {auth_header}",
+                "Content-Type": "application/json-patch+json"
             }
-        
-        # Create authentication header for REAL API calls
-        auth_header = base64.b64encode(f":{pat_token}".encode()).decode()
-        headers = {
-            "Authorization": f"Basic {auth_header}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
-        
-        if operation == "create_work_item":
-            # REAL Azure DevOps work item creation
-            work_item_type = body.get("work_item_type", "User Story")
-            title = body.get("title", "ADOMCP Created Work Item")
-            description = body.get("description", "Created via ADOMCP REAL API Integration")
             
-            # Azure DevOps work item creation API
-            url = f"{organization_url}/{project_id}/_apis/wit/workitems/${urllib.parse.quote(work_item_type)}?api-version=7.0"
-            
-            work_item_data = [
-                {
-                    "op": "add",
-                    "path": "/fields/System.Title",
-                    "value": title
-                },
-                {
-                    "op": "add", 
-                    "path": "/fields/System.Description",
-                    "value": description
-                }
+            # Build the work item fields
+            fields = [
+                {"op": "add", "path": "/fields/System.Title", "value": title},
+                {"op": "add", "path": "/fields/System.WorkItemType", "value": work_item_type}
             ]
             
-            # Add optional fields if provided
-            if body.get("area_path"):
-                work_item_data.append({
-                    "op": "add",
-                    "path": "/fields/System.AreaPath", 
-                    "value": body.get("area_path")
-                })
+            if description:
+                fields.append({"op": "add", "path": "/fields/System.Description", "value": description})
             
-            if body.get("iteration_path"):
-                work_item_data.append({
-                    "op": "add",
-                    "path": "/fields/System.IterationPath",
-                    "value": body.get("iteration_path")
-                })
+            # Add optional fields
+            if kwargs.get("area_path"):
+                fields.append({"op": "add", "path": "/fields/System.AreaPath", "value": kwargs["area_path"]})
+            if kwargs.get("iteration_path"):
+                fields.append({"op": "add", "path": "/fields/System.IterationPath", "value": kwargs["iteration_path"]})
+            if kwargs.get("assigned_to"):
+                fields.append({"op": "add", "path": "/fields/System.AssignedTo", "value": kwargs["assigned_to"]})
+            if kwargs.get("tags"):
+                fields.append({"op": "add", "path": "/fields/System.Tags", "value": kwargs["tags"]})
             
-            if body.get("assigned_to"):
-                work_item_data.append({
-                    "op": "add",
-                    "path": "/fields/System.AssignedTo",
-                    "value": body.get("assigned_to")
-                })
+            url = f"{self.base_url}/wit/workitems/${work_item_type}?api-version=7.1-preview.3"
             
-            if body.get("tags"):
-                work_item_data.append({
-                    "op": "add",
-                    "path": "/fields/System.Tags",
-                    "value": body.get("tags")
-                })
-            
-            # Add custom fields
-            custom_fields = body.get("custom_fields", {})
-            for field_name, field_value in custom_fields.items():
-                work_item_data.append({
-                    "op": "add",
-                    "path": f"/fields/{field_name}",
-                    "value": field_value
-                })
-            
-            headers["Content-Type"] = "application/json-patch+json"
-            
-            # Make REAL API call to Azure DevOps
-            response = http_requests.post(url, json=work_item_data, headers=headers, timeout=30)
-            
-            if response.status_code in [200, 201]:
-                work_item = response.json()
-                return {
-                    "success": True,
-                    "message": "✅ REAL: Work item created successfully in Azure DevOps",
-                    "work_item_id": work_item.get("id"),
-                    "work_item_url": work_item.get("_links", {}).get("html", {}).get("href"),
-                    "operation": operation,
-                    "work_item_type": work_item_type,
-                    "api_response": "REAL_API_SUCCESS"
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"❌ REAL: Failed to create work item: {response.status_code}",
-                    "error": response.text,
-                    "api_response": "REAL_API_FAILED"
-                }
-                
-        elif operation == "get_projects":
-            # REAL Azure DevOps projects API call
-            url = f"{organization_url}/_apis/projects?api-version=7.0"
-            
-            response = http_requests.get(url, headers=headers, timeout=30)
-            
-            if response.status_code == 200:
-                projects_data = response.json()
-                projects = []
-                for project in projects_data.get("value", []):
-                    projects.append({
-                        "id": project.get("id"),
-                        "name": project.get("name"),
-                        "description": project.get("description", ""),
-                        "url": project.get("url"),
-                        "state": project.get("state"),
-                        "visibility": project.get("visibility")
-                    })
-                
-                return {
-                    "success": True,
-                    "message": "✅ REAL: Projects retrieved from Azure DevOps",
-                    "projects": projects,
-                    "count": len(projects),
-                    "api_response": "REAL_API_SUCCESS"
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"❌ REAL: Failed to get projects: {response.status_code}",
-                    "error": response.text,
-                    "api_response": "REAL_API_FAILED"
-                }
-                
-        elif operation == "update_work_item":
-            # REAL Azure DevOps work item update
-            work_item_id = body.get("work_item_id")
-            updates = body.get("updates", {})
-            
-            if not work_item_id:
-                return {
-                    "success": False,
-                    "message": "work_item_id is required for update operation"
-                }
-            
-            url = f"{organization_url}/{project_id}/_apis/wit/workitems/{work_item_id}?api-version=7.0"
-            
-            update_data = []
-            for field, value in updates.items():
-                # Handle different field formats
-                if field.startswith("/fields/"):
-                    field_path = field
-                elif field.startswith("System.") or field.startswith("Custom.") or field.startswith("Microsoft."):
-                    field_path = f"/fields/{field}"
-                else:
-                    field_path = f"/fields/System.{field}"
-                
-                update_data.append({
-                    "op": "add",
-                    "path": field_path,
-                    "value": value
-                })
-            
-            headers["Content-Type"] = "application/json-patch+json"
-            
-            response = http_requests.patch(url, json=update_data, headers=headers, timeout=30)
-            
-            if response.status_code == 200:
-                work_item = response.json()
-                return {
-                    "success": True,
-                    "message": "✅ REAL: Work item updated successfully in Azure DevOps",
-                    "work_item_id": work_item.get("id"),
-                    "updates_applied": len(update_data),
-                    "updated_fields": list(updates.keys()),
-                    "work_item_url": work_item.get("_links", {}).get("html", {}).get("href"),
-                    "api_response": "REAL_API_SUCCESS"
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"❌ REAL: Failed to update work item: {response.status_code}",
-                    "error": response.text,
-                    "api_response": "REAL_API_FAILED"
-                }
-        else:
+            async with aiohttp.ClientSession() as session:
+                async with session.patch(url, headers=headers, json=fields) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return {
+                            "success": True,
+                            "work_item_id": result["id"],
+                            "work_item_type": result["fields"]["System.WorkItemType"],
+                            "work_item_url": result["_links"]["html"]["href"],
+                            "message": f"Work item '{title}' created successfully"
+                        }
+                    else:
+                        error_text = await response.text()
+                        return {
+                            "success": False,
+                            "message": f"Failed to create work item: {response.status} - {error_text}"
+                        }
+        except Exception as e:
             return {
                 "success": False,
-                "message": f"Unknown operation: {operation}",
-                "supported_operations": ["create_work_item", "get_projects", "update_work_item"]
+                "message": f"Error creating work item: {str(e)}"
+            }
+
+    async def update_work_item(self, work_item_id: int, updates: dict[str, Any]) -> dict[str, Any]:
+        """Update an existing work item in Azure DevOps"""
+        try:
+            auth_header = base64.b64encode(f":{self.pat_token}".encode()).decode()
+            headers = {
+                "Authorization": f"Basic {auth_header}",
+                "Content-Type": "application/json-patch+json"
             }
             
-    except Exception as e:
-        return {
-            "success": False,
-            "message": "❌ REAL: Azure DevOps API integration failed",
-            "error": str(e),
-            "operation": body.get("operation") if 'body' in locals() else "unknown"
-        }
-
-@app.get("/api/github")
-async def github_get():
-    """GitHub integration info"""
-    return {
-        "service": "GitHub Integration",
-        "status": "operational", 
-        "operations": ["issues", "repositories", "commits", "pull_requests"],
-        "authentication": "GitHub token required",
-        "supported_operations": ["create_issue", "list_repositories", "get_commits"],
-        "endpoints": {
-            "repositories": "/api/github/repositories",
-            "issues": "/api/github/issues",
-            "commits": "/api/github/commits"
-        },
-        "deployment": "railway"
-    }
-
-@app.post("/api/github")
-async def github_post(request: Request):
-    """GitHub operations"""
-    try:
-        body = await request.json()
-        operation = body.get("operation")
-        
-        if operation == "create_issue":
-            return {
-                "success": True,
-                "message": "GitHub issue creation simulated",
-                "issue_id": 98765,
-                "operation": operation,
-                "data": body
-            }
-        elif operation == "list_repositories":
-            return {
-                "success": True,
-                "repositories": [
-                    {
-                        "name": "ADOMCP",
-                        "full_name": "Jita81/ADOMCP",
-                        "description": "Azure DevOps MCP Server"
-                    }
-                ]
-            }
-        else:
+            # Convert updates to JSON patch format
+            fields = []
+            for field_path, value in updates.items():
+                if not field_path.startswith("/fields/"):
+                    field_path = f"/fields/{field_path}"
+                fields.append({"op": "replace", "path": field_path, "value": value})
+            
+            url = f"{self.base_url}/wit/workitems/{work_item_id}?api-version=7.1-preview.3"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.patch(url, headers=headers, json=fields) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        return {
+                            "success": True,
+                            "work_item_id": result["id"],
+                            "updates_applied": len(fields),
+                            "work_item_url": result["_links"]["html"]["href"],
+                            "message": f"Work item {work_item_id} updated successfully"
+                        }
+                    else:
+                        error_text = await response.text()
+                        return {
+                            "success": False,
+                            "message": f"Failed to update work item: {response.status} - {error_text}"
+                        }
+        except Exception as e:
             return {
                 "success": False,
-                "message": f"Unknown operation: {operation}",
-                "supported_operations": ["create_issue", "list_repositories", "get_commits"]
+                "message": f"Error updating work item: {str(e)}"
             }
-            
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-# Legacy endpoints for backward compatibility
-@app.get("/api/keys")
-async def keys_get(user_id: str = None):
-    """Legacy API key management endpoint"""
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id parameter required")
+class GitHubAPI:
+    """GitHub API client for repository operations"""
     
-    return {
-        "service": "ADOMCP Legacy Key Management",
-        "status": "operational",
-        "user_id": user_id,
-        "keys": [],
-        "message": "Legacy endpoint - use /api/secure-keys for new implementations",
-        "deployment": "railway"
-    }
-
-@app.post("/api/keys")
-async def keys_post(request: Request):
-    """Legacy API key storage endpoint"""
-    try:
-        body = await request.json()
-        user_id = body.get("user_id")
-        platform = body.get("platform")
-        api_key = body.get("api_key")
+    def __init__(self, token: str):
+        self.token = token
+        self.base_url = "https://api.github.com"
         
-        if not all([user_id, platform, api_key]):
-            raise HTTPException(status_code=400, detail="user_id, platform, and api_key required")
+    async def create_issue(self, repository: str, title: str, description: str = "", **kwargs) -> dict[str, Any]:
+        """Create a new issue in GitHub repository"""
+        try:
+            headers = {
+                "Authorization": f"token {self.token}",
+                "Accept": "application/vnd.github.v3+json",
+                "Content-Type": "application/json"
+            }
+            
+            issue_data = {
+                "title": title,
+                "body": description
+            }
+            
+            if kwargs.get("labels"):
+                issue_data["labels"] = kwargs["labels"]
+            if kwargs.get("assignees"):
+                issue_data["assignees"] = kwargs["assignees"]
+            
+            url = f"{self.base_url}/repos/{repository}/issues"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=issue_data) as response:
+                    if response.status == 201:
+                        result = await response.json()
+                        return {
+                            "success": True,
+                            "issue_id": result["number"],
+                            "issue_url": result["html_url"],
+                            "message": f"Issue '{title}' created successfully in {repository}"
+                        }
+                    else:
+                        error_text = await response.text()
+                        return {
+                            "success": False,
+                            "message": f"Failed to create issue: {response.status} - {error_text}"
+                        }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error creating issue: {str(e)}"
+            }
+
+    async def list_repositories(self, owner: str = None) -> dict[str, Any]:
+        """List repositories for the authenticated user or specified owner"""
+        try:
+            headers = {
+                "Authorization": f"token {self.token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            
+            if owner:
+                url = f"{self.base_url}/users/{owner}/repos"
+            else:
+                url = f"{self.base_url}/user/repos"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        repos = await response.json()
+                        repo_list = [{"name": repo["name"], "url": repo["html_url"]} for repo in repos[:10]]
+                        return {
+                            "success": True,
+                            "repositories": repo_list,
+                            "message": f"Found {len(repo_list)} repositories"
+                        }
+                    else:
+                        error_text = await response.text()
+                        return {
+                            "success": False,
+                            "message": f"Failed to list repositories: {response.status} - {error_text}"
+                        }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error listing repositories: {str(e)}"
+            }
+
+@click.command()
+@click.option("--port", default=3000, help="Port to listen on for HTTP")
+@click.option(
+    "--log-level",
+    default="INFO", 
+    help="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+)
+@click.option(
+    "--json-response",
+    is_flag=True,
+    default=False,
+    help="Enable JSON responses instead of SSE streams",
+)
+def main(port: int, log_level: str, json_response: bool) -> int:
+    """Start the ADOMCP server with official MCP SDK compliance"""
+    
+    # Configure logging
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    
+    # Create the MCP server using official SDK
+    app = Server("ADOMCP")
+    
+    @app.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.ContentBlock]:
+        """Handle tool calls using official MCP SDK patterns"""
         
-        # Validate platform
-        valid_platforms = ["azure-devops", "github", "gitlab"]
-        if platform not in valid_platforms:
-            raise HTTPException(status_code=400, detail=f"Invalid platform. Must be one of: {valid_platforms}")
+        # Get environment variables for API tokens
+        azure_pat = os.getenv("AZURE_DEVOPS_PAT")
+        github_token = os.getenv("GITHUB_TOKEN")
         
-        return {
-            "success": True,
-            "message": "API key stored (legacy endpoint)",
-            "user_id": user_id,
-            "platform": platform,
-            "recommendation": "Use /api/secure-keys for enhanced security"
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            if name == "create_work_item":
+                if not azure_pat:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Error: AZURE_DEVOPS_PAT environment variable not set"
+                    )]
+                
+                azure_api = AzureDevOpsAPI(azure_pat)
+                result = await azure_api.create_work_item(
+                    title=arguments.get("title", "MCP Created Work Item"),
+                    work_item_type=arguments.get("work_item_type", "User Story"),
+                    description=arguments.get("description", "Created via MCP tool call"),
+                    area_path=arguments.get("area_path"),
+                    iteration_path=arguments.get("iteration_path"),
+                    assigned_to=arguments.get("assigned_to"),
+                    tags=arguments.get("tags")
+                )
+                
+                if result["success"]:
+                    response_text = f"✅ Work item '{arguments.get('title')}' created successfully!\n"
+                    response_text += f"• Work Item ID: {result['work_item_id']}\n"
+                    response_text += f"• Type: {result['work_item_type']}\n"
+                    response_text += f"• URL: {result['work_item_url']}"
+                else:
+                    response_text = f"❌ Failed to create work item: {result['message']}"
+                
+                return [types.TextContent(type="text", text=response_text)]
+                
+            elif name == "update_work_item":
+                if not azure_pat:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Error: AZURE_DEVOPS_PAT environment variable not set"
+                    )]
+                
+                work_item_id = arguments.get("work_item_id")
+                if not work_item_id:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Error: work_item_id is required for update_work_item"
+                    )]
+                
+                azure_api = AzureDevOpsAPI(azure_pat)
+                result = await azure_api.update_work_item(
+                    work_item_id=work_item_id,
+                    updates=arguments.get("updates", {})
+                )
+                
+                if result["success"]:
+                    response_text = f"✅ Work item {work_item_id} updated successfully!\n"
+                    response_text += f"• Fields updated: {result['updates_applied']}\n"
+                    response_text += f"• URL: {result['work_item_url']}"
+                else:
+                    response_text = f"❌ Failed to update work item: {result['message']}"
+                
+                return [types.TextContent(type="text", text=response_text)]
+                
+            elif name == "github_integration":
+                if not github_token:
+                    return [types.TextContent(
+                        type="text",
+                        text="❌ Error: GITHUB_TOKEN environment variable not set"
+                    )]
+                
+                github_api = GitHubAPI(github_token)
+                action = arguments.get("action", "create_issue")
+                
+                if action == "create_issue":
+                    result = await github_api.create_issue(
+                        repository=arguments.get("repository", "Jita81/ADOMCP"),
+                        title=arguments.get("title", "MCP Created Issue"),
+                        description=arguments.get("description", "Created via MCP tool call"),
+                        labels=arguments.get("labels", []),
+                        assignees=arguments.get("assignees", [])
+                    )
+                    
+                    if result["success"]:
+                        response_text = f"✅ GitHub issue created successfully!\n"
+                        response_text += f"• Issue ID: {result['issue_id']}\n"
+                        response_text += f"• URL: {result['issue_url']}"
+                    else:
+                        response_text = f"❌ Failed to create issue: {result['message']}"
+                        
+                elif action == "list_repositories":
+                    result = await github_api.list_repositories()
+                    
+                    if result["success"]:
+                        response_text = f"✅ Found {len(result['repositories'])} repositories:\n"
+                        for repo in result["repositories"]:
+                            response_text += f"• {repo['name']}: {repo['url']}\n"
+                    else:
+                        response_text = f"❌ Failed to list repositories: {result['message']}"
+                        
+                else:
+                    response_text = f"❌ Unknown GitHub action: {action}"
+                
+                return [types.TextContent(type="text", text=response_text)]
+                
+            else:
+                return [types.TextContent(
+                    type="text",
+                    text=f"❌ Unknown tool: {name}"
+                )]
+                
+        except Exception as e:
+            logger.error(f"Tool execution error: {str(e)}")
+            return [types.TextContent(
+                type="text",
+                text=f"❌ Tool execution failed: {str(e)}"
+            )]
 
-@app.get("/api/test")
-async def test_endpoint():
-    """Test endpoint for validation"""
-    return {
-        "test": "success",
-        "message": "External API access verified",
-        "timestamp": datetime.now().isoformat(),
-        "deployment": "railway",
-        "endpoint": "/api/test"
-    }
+    @app.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        """List available tools using official MCP SDK patterns"""
+        return [
+            types.Tool(
+                name="create_work_item",
+                description="Create a new work item in Azure DevOps",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Title of the work item"
+                        },
+                        "work_item_type": {
+                            "type": "string",
+                            "description": "Type of work item (User Story, Bug, Task, etc.)",
+                            "default": "User Story"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Detailed description of the work item"
+                        },
+                        "area_path": {
+                            "type": "string",
+                            "description": "Area path for the work item"
+                        },
+                        "iteration_path": {
+                            "type": "string",
+                            "description": "Iteration path for the work item"
+                        },
+                        "assigned_to": {
+                            "type": "string",
+                            "description": "Email of user to assign the work item to"
+                        },
+                        "tags": {
+                            "type": "string",
+                            "description": "Tags for the work item (semicolon separated)"
+                        }
+                    },
+                    "required": ["title"]
+                }
+            ),
+            types.Tool(
+                name="update_work_item",
+                description="Update an existing work item in Azure DevOps",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "work_item_id": {
+                            "type": "integer",
+                            "description": "ID of the work item to update"
+                        },
+                        "updates": {
+                            "type": "object",
+                            "description": "Fields to update (e.g., {'System.Title': 'New Title', 'System.State': 'Active'})"
+                        }
+                    },
+                    "required": ["work_item_id", "updates"]
+                }
+            ),
+            types.Tool(
+                name="github_integration",
+                description="Integrate with GitHub repositories and issues",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "description": "Action to perform (create_issue, list_repositories)",
+                            "enum": ["create_issue", "list_repositories"]
+                        },
+                        "repository": {
+                            "type": "string",
+                            "description": "Repository in format 'owner/repo'",
+                            "default": "Jita81/ADOMCP"
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "Title for new issue (when action=create_issue)"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Description for new issue (when action=create_issue)"
+                        },
+                        "labels": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Labels for new issue (when action=create_issue)"
+                        },
+                        "assignees": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Assignees for new issue (when action=create_issue)"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            )
+        ]
 
-@app.get("/api/supabase-config")
-async def supabase_config():
-    """Supabase configuration endpoint"""
-    return {
-        "service": "ADOMCP Supabase Configuration",
-        "status": "operational",
-        "database": "simulation_mode",
-        "features": ["user_management", "api_key_storage", "audit_logging"],
-        "note": "Supabase integration available for production deployments",
-        "deployment": "railway"
-    }
+    # Create the StreamableHTTP session manager for Claude Desktop compatibility
+    session_manager = StreamableHTTPSessionManager(
+        app=app,
+        json_response=json_response,
+    )
 
-# OAuth sub-routes
-@app.get("/api/oauth/login")
-async def oauth_login():
-    """OAuth login endpoint"""
-    return {
-        "service": "ADOMCP OAuth Login",
-        "available_providers": ["github", "google", "microsoft"],
-        "login_urls": {
-            "github": "/api/oauth/github/login",
-            "google": "/api/oauth/google/login",
-            "microsoft": "/api/oauth/microsoft/login"
-        },
-        "status": "operational",
-        "deployment": "railway"
-    }
+    # ASGI handler for streamable HTTP connections
+    async def handle_streamable_http(scope: Scope, receive: Receive, send: Send) -> None:
+        await session_manager.handle_request(scope, receive, send)
 
-@app.get("/api/oauth/callback")
-async def oauth_callback(provider: str = None, code: str = None, state: str = None):
-    """OAuth callback endpoint"""
-    return {
-        "service": "ADOMCP OAuth Callback",
-        "provider": provider,
-        "status": "callback_received",
-        "message": "OAuth callback processed (simulation mode)",
-        "next_step": "Token exchange and user session creation",
-        "deployment": "railway"
-    }
+    @contextlib.asynccontextmanager
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
+        """Context manager for managing session manager lifecycle."""
+        async with session_manager.run():
+            logger.info("ADOMCP Server started with StreamableHTTP session manager!")
+            logger.info(f"Server running on port {port}")
+            logger.info("Ready for Claude Desktop connections!")
+            try:
+                yield
+            finally:
+                logger.info("ADOMCP Server shutting down...")
 
-@app.get("/api/oauth/status")
-async def oauth_status():
-    """OAuth authentication status"""
-    return {
-        "service": "ADOMCP OAuth Status",
-        "authenticated": False,
-        "providers": ["github", "google", "microsoft"],
-        "session": None,
-        "message": "No active OAuth session",
-        "deployment": "railway"
-    }
+    # Create the Starlette ASGI application
+    starlette_app = Starlette(
+        debug=True,
+        routes=[
+            Mount("/mcp", app=handle_streamable_http),
+        ],
+        lifespan=lifespan,
+    )
 
-# Additional missing endpoint mappings
-@app.get("/api/oauth_mcp")
-async def oauth_mcp_legacy():
-    """Legacy OAuth MCP endpoint mapping"""
-    return await oauth_mcp_get()
+    # Add CORS middleware for browser compatibility
+    starlette_app = CORSMiddleware(
+        starlette_app,
+        allow_origins=["*"],  # Allow all origins - adjust for production
+        allow_methods=["GET", "POST", "DELETE"],  # MCP streamable HTTP methods
+        expose_headers=["Mcp-Session-Id"],
+    )
 
-# Root-level MCP endpoint (Claude might expect this path)
-@app.get("/mcp")
-async def mcp_root_get():
-    """Root-level MCP endpoint for Claude Desktop"""
-    return await mcp_get()
+    import uvicorn
+    uvicorn.run(starlette_app, host="0.0.0.0", port=port)
 
-@app.options("/mcp")
-async def mcp_root_options():
-    """Handle CORS preflight for root MCP endpoint"""
-    return await mcp_options()
-
-@app.post("/mcp")
-async def mcp_root_post(request: Request, response: Response):
-    """Root-level MCP endpoint for Claude Desktop"""
-    return await mcp_post(request, response)
+    return 0
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    main()
