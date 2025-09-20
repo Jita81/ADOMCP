@@ -1,1 +1,1 @@
-web: python main.py --port $PORT --log-level INFO
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
