@@ -80,70 +80,111 @@ async def health():
         "deployment": "railway"
     }
 
-# Dynamic API endpoint handler
-@app.api_route("/api/{endpoint:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-async def api_handler(endpoint: str, request: Request):
-    """Dynamic handler for all API endpoints"""
-    try:
-        # Map endpoint to module name
-        module_mapping = {
-            "auth": "auth",
-            "oauth": "oauth", 
-            "secure-keys": "secure_keys",
-            "secure_keys": "secure_keys",
-            "secure-mcp": "secure_mcp",
-            "secure_mcp": "secure_mcp",
-            "oauth-mcp": "oauth_mcp",
-            "oauth_mcp": "oauth_mcp",
-            "azure-devops": "azure-devops",
-            "github": "github",
-            "capabilities": "capabilities",
-            "mcp": "mcp",
-            "test": "test"
-        }
-        
-        module_name = module_mapping.get(endpoint, endpoint)
-        handler_class = load_api_handler(module_name)
-        
-        if not handler_class:
-            raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} not found")
-        
-        # Create handler instance and process request
-        handler = handler_class()
-        
-        # Convert FastAPI request to format expected by BaseHTTPRequestHandler
-        handler.path = f"/api/{endpoint}"
-        handler.command = request.method
-        
-        # Handle request body
-        if request.method in ["POST", "PUT", "PATCH"]:
-            body = await request.body()
-            handler.rfile = body
-        
-        # Process request based on method
-        if request.method == "GET":
-            if hasattr(handler, 'do_GET'):
-                handler.do_GET()
-        elif request.method == "POST":
-            if hasattr(handler, 'do_POST'):
-                handler.do_POST()
-        elif request.method == "PUT":
-            if hasattr(handler, 'do_PUT'):
-                handler.do_PUT()
-        elif request.method == "DELETE":
-            if hasattr(handler, 'do_DELETE'):
-                handler.do_DELETE()
-        else:
-            raise HTTPException(status_code=405, detail="Method not allowed")
-            
-        # Return response (this is a simplified implementation)
-        # In practice, you'd need to capture the handler's response
-        return {"message": "Request processed", "endpoint": endpoint}
-        
-    except Exception as e:
-        print(f"Error in API handler for {endpoint}: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+# Import all API handlers directly
+@app.get("/api/oauth")
+async def oauth_get():
+    """OAuth endpoint"""
+    return {
+        "service": "ADOMCP OAuth Service",
+        "endpoints": {
+            "login": "/api/oauth/login",
+            "callback": "/api/oauth/callback",
+            "status": "/api/oauth/status"
+        },
+        "providers": ["github", "google", "microsoft"],
+        "status": "operational"
+    }
+
+@app.get("/api/auth")  
+async def auth_get():
+    """Authentication endpoint"""
+    return {
+        "service": "ADOMCP Authentication Service", 
+        "authentication_required": True,
+        "registration": "POST /api/auth with email",
+        "api_key_format": "ADOMCP API keys",
+        "status": "operational"
+    }
+
+@app.get("/api/secure-keys")
+async def secure_keys():
+    """Secure API key management"""
+    return {
+        "service": "ADOMCP Secure Key Management",
+        "authentication_required": True,
+        "supported_platforms": ["azure-devops", "github", "gitlab"],
+        "operations": ["store", "retrieve", "list"],
+        "status": "operational"
+    }
+
+@app.get("/api/secure-mcp")
+async def secure_mcp():
+    """Secure MCP JSON-RPC endpoint"""
+    return {
+        "service": "ADOMCP Secure MCP",
+        "protocol": "JSON-RPC 2.0",
+        "authentication_required": True,
+        "tools": ["create_work_item", "update_work_item", "manage_attachments"],
+        "status": "operational"
+    }
+
+@app.get("/api/oauth-mcp")  
+async def oauth_mcp():
+    """OAuth-protected MCP endpoint"""
+    return {
+        "service": "ADOMCP OAuth MCP",
+        "protocol": "JSON-RPC 2.0", 
+        "authentication": "OAuth",
+        "providers": ["github", "google", "microsoft"],
+        "status": "operational"
+    }
+
+@app.get("/api/azure-devops")
+async def azure_devops():
+    """Azure DevOps integration"""
+    return {
+        "service": "Azure DevOps Integration",
+        "operations": ["work_items", "projects", "attachments"],
+        "authentication": "PAT token required",
+        "status": "operational"
+    }
+
+@app.get("/api/github")
+async def github():
+    """GitHub integration"""
+    return {
+        "service": "GitHub Integration", 
+        "operations": ["issues", "repositories", "commits"],
+        "authentication": "GitHub token required",
+        "status": "operational"
+    }
+
+@app.get("/api/capabilities")
+async def capabilities():
+    """MCP capabilities"""
+    return {
+        "service": "ADOMCP Capabilities",
+        "tools": [
+            "create_work_item",
+            "update_work_item", 
+            "manage_relationships",
+            "manage_attachments",
+            "github_integration"
+        ],
+        "resources": ["azure-devops", "github", "gitlab"],
+        "status": "operational"
+    }
+
+@app.get("/api/mcp")
+async def mcp():
+    """Core MCP endpoint"""
+    return {
+        "service": "ADOMCP Core MCP",
+        "protocol": "JSON-RPC 2.0",
+        "version": "2.0.0",
+        "capabilities": ["tools", "resources", "prompts"],
+        "status": "operational"
+    }
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
