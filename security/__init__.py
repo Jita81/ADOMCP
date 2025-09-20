@@ -19,6 +19,10 @@ from .observability import (
 from .authentication import (
     authenticate_api_request, generate_user_api_key, validate_user_access, auth_manager
 )
+from .oauth import (
+    oauth_manager, get_oauth_providers, generate_oauth_url, handle_oauth_callback,
+    authenticate_oauth_request
+)
 
 # Try to import Supabase integration
 try:
@@ -71,6 +75,13 @@ __all__ = [
     'generate_user_api_key',
     'validate_user_access',
     'auth_manager',
+    
+    # OAuth
+    'oauth_manager',
+    'get_oauth_providers',
+    'generate_oauth_url',
+    'handle_oauth_callback',
+    'authenticate_oauth_request',
     
     # Supabase integration (if available)
     'store_api_key_secure',
