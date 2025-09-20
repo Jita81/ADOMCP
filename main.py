@@ -252,16 +252,19 @@ app.add_middleware(
 async def get_api_tokens_from_auth(user_api_key: str) -> Dict[str, str]:
     """Get platform API tokens from authenticated user storage"""
     if not SECURITY_AVAILABLE or not auth_manager:
+        logger.debug("Security system not available, skipping user authentication")
         return {}
     
     try:
         # Authenticate the user API key and get stored platform tokens
         auth_result = auth_manager.authenticate_api_key(user_api_key)
-        if not auth_result.get("valid"):
+        if not auth_result or not auth_result.get("valid"):
+            logger.debug("User API key authentication failed")
             return {}
         
         user_id = auth_result.get("user_id")
         if not user_id:
+            logger.debug("No user ID from authentication result")
             return {}
         
         # Get encrypted platform API keys from storage
@@ -271,13 +274,22 @@ async def get_api_tokens_from_auth(user_api_key: str) -> Dict[str, str]:
         github_key = os.getenv(f"USER_{user_id}_GITHUB_TOKEN")
         
         if azure_key:
-            stored_keys["azure_pat"] = decrypt_api_key_advanced(azure_key) if SECURITY_AVAILABLE else azure_key
+            try:
+                stored_keys["azure_pat"] = decrypt_api_key_advanced(azure_key) if SECURITY_AVAILABLE else azure_key
+            except Exception as decrypt_error:
+                logger.warning(f"Failed to decrypt Azure PAT for user {user_id}: {decrypt_error}")
+        
         if github_key:
-            stored_keys["github_token"] = decrypt_api_key_advanced(github_key) if SECURITY_AVAILABLE else github_key
+            try:
+                stored_keys["github_token"] = decrypt_api_key_advanced(github_key) if SECURITY_AVAILABLE else github_key
+            except Exception as decrypt_error:
+                logger.warning(f"Failed to decrypt GitHub token for user {user_id}: {decrypt_error}")
             
+        logger.debug(f"Retrieved {len(stored_keys)} API keys for user {user_id}")
         return stored_keys
+        
     except Exception as e:
-        logger.error(f"Error retrieving API tokens: {str(e)}")
+        logger.warning(f"Authentication system error (falling back to env vars): {str(e)}")
         return {}
 
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)) -> Optional[str]:
@@ -617,9 +629,15 @@ async def mcp_post(request: Request, response: Response):
         elif method == "tools/call":
             # Extract user API key from Authorization header if provided
             user_api_key = None
-            auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
-            if auth_header and auth_header.startswith("Bearer "):
-                user_api_key = auth_header[7:]  # Remove "Bearer " prefix
+            try:
+                auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+                if auth_header and auth_header.startswith("Bearer ") and len(auth_header) > 7:
+                    user_api_key = auth_header[7:].strip()  # Remove "Bearer " prefix and trim
+                    if not user_api_key:  # If empty after trimming
+                        user_api_key = None
+            except Exception as e:
+                logger.debug(f"Auth header parsing error (ignoring): {e}")
+                user_api_key = None
             
             return await handle_tool_call(params, request_id, user_api_key)
             
@@ -657,15 +675,15 @@ async def handle_tool_call(params: Dict, request_id: Any, user_api_key: Optional
     if user_api_key and SECURITY_AVAILABLE:
         try:
             user_tokens = await get_api_tokens_from_auth(user_api_key)
-            if user_tokens.get("azure_pat"):
+            if user_tokens and user_tokens.get("azure_pat"):
                 azure_pat = user_tokens["azure_pat"]
                 logger.info("Using authenticated user's Azure DevOps PAT")
-            if user_tokens.get("github_token"):
+            if user_tokens and user_tokens.get("github_token"):
                 github_token = user_tokens["github_token"]
                 logger.info("Using authenticated user's GitHub token")
         except Exception as e:
-            logger.warning(f"Failed to retrieve user tokens: {str(e)}")
-            # Fall back to environment variables
+            logger.warning(f"Authentication failed, using environment variables: {str(e)}")
+            # Silently fall back to environment variables
     
     try:
         if tool_name == "create_work_item":
