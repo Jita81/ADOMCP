@@ -46,37 +46,77 @@ Before you can use ADOMCP, you need to get permission tokens from the platforms 
 
 ### Step 2: Use the Live Tool 🌐
 
-**The easiest way**: Use our hosted version at `https://adomcp.vercel.app`
+**The easiest way**: Use our hosted API at `https://adomcp.vercel.app`
 
-You don't need to install anything! Just use the web interface to:
+You don't need to install anything! Use the API endpoints directly:
 
-1. **Store your tokens securely**:
+1. **Store your tokens securely** (using curl or any HTTP client):
 ```bash
-# Visit: https://adomcp.vercel.app/api/keys
-# Fill in your information using the web form
+# Store your Azure DevOps token
+curl -X POST https://adomcp.vercel.app/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your-email@company.com",
+    "platform": "azure_devops",
+    "api_key": "your-pat-token",
+    "organization_url": "https://dev.azure.com/YourOrg"
+  }'
 ```
 
-2. **Start managing your projects**:
+2. **Start managing your projects** (using MCP protocol or REST API):
 ```bash
-# Visit: https://adomcp.vercel.app
-# Use the web interface to create tasks, upload documents, etc.
+# Test the MCP protocol
+curl -X POST https://adomcp.vercel.app/api/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
 ### Step 3: Create Your First Task ✅
 
-Using the web interface or API:
+Using the MCP JSON-RPC protocol:
 
-1. **Choose your platform** (Azure DevOps, GitHub, or GitLab)
-2. **Create a new task** with:
-   - Title: "Test Task"
-   - Description: "This is my first task created with ADOMCP"
-   - Type: "Task" or "Issue"
-3. **Upload a document** (optional):
-   - Create a simple text file with notes
-   - Attach it to your task
-4. **Save and view** your new task
+1. **Create a work item** using the API:
+```bash
+curl -X POST https://adomcp.vercel.app/api/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "create_work_item",
+      "arguments": {
+        "user_id": "your-email@company.com",
+        "platform": "azure_devops",
+        "title": "My First ADOMCP Task",
+        "work_item_type": "Task",
+        "description": "This is my first task created with ADOMCP"
+      }
+    },
+    "id": 1
+  }'
+```
 
-**🎉 Congratulations!** You've just created your first cross-platform task!
+2. **Upload documentation** (optional):
+```bash
+curl -X POST https://adomcp.vercel.app/api/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "name": "upload_attachment",
+      "arguments": {
+        "user_id": "your-email@company.com",
+        "work_item_id": 123,
+        "filename": "notes.md",
+        "content": "# My Project Notes\n\nThis is documentation for my task."
+      }
+    },
+    "id": 2
+  }'
+```
+
+**🎉 Congratulations!** You've just created your first cross-platform task using the ADOMCP API!
 
 ---
 
@@ -110,11 +150,17 @@ Using the web interface or API:
 
 ## 🛠️ Installation Options
 
-### Option 1: Use the Hosted Version (Recommended) 🌟
+### Option 1: Use the Hosted API (Recommended) 🌟
 
-**Best for**: Most users, teams, non-technical users
+**Best for**: Most users, teams, developers
 
-Simply visit `https://adomcp.vercel.app` and start using it immediately. No installation required!
+Use the hosted API at `https://adomcp.vercel.app` directly. No installation required!
+
+**Access via**:
+- **Command Line**: Use `curl` commands (examples below)
+- **MCP Clients**: Connect your MCP-compatible tools
+- **HTTP Clients**: Use Postman, Insomnia, or any REST client
+- **Code Integration**: Call from your applications
 
 ### Option 2: Deploy Your Own Instance 🚀
 
@@ -164,25 +210,27 @@ python api/mcp-server.py
 
 ### 🔐 Setting Up Your Tokens
 
-1. **Go to the keys page**: `https://adomcp.vercel.app/api/keys`
-
-2. **Store your Azure DevOps token**:
-```json
-{
-  "user_id": "your-email@company.com",
-  "platform": "azure_devops",
-  "api_key": "your-azure-devops-token",
-  "organization_url": "https://dev.azure.com/YourCompany"
-}
+1. **Store your Azure DevOps token** using a POST request:
+```bash
+curl -X POST https://adomcp.vercel.app/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your-email@company.com",
+    "platform": "azure_devops",
+    "api_key": "your-azure-devops-token",
+    "organization_url": "https://dev.azure.com/YourCompany"
+  }'
 ```
 
-3. **Store your GitHub token**:
-```json
-{
-  "user_id": "your-email@company.com",
-  "platform": "github", 
-  "api_key": "your-github-token"
-}
+2. **Store your GitHub token** using a similar POST request:
+```bash
+curl -X POST https://adomcp.vercel.app/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your-email@company.com",
+    "platform": "github", 
+    "api_key": "your-github-token"
+  }'
 ```
 
 ### 📝 Creating Tasks and Work Items
