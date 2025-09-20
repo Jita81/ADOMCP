@@ -42,19 +42,30 @@ A comprehensive Model Context Protocol (MCP) module that provides unified integr
 - **Cross-Platform Insights**: Unified view of development activities
 - **Health Monitoring**: Real-time status monitoring of all integrations
 
-## 🛠️ Installation
+## 🛠️ Installation & Deployment
 
-### Prerequisites
+### 🚀 **Production Deployment (Recommended)**
 
-- Python 3.8 or higher
-- Accounts on target platforms (Azure DevOps, GitHub, GitLab)
-- Appropriate API tokens for each platform:
-  - Azure DevOps: Personal Access Token (PAT)
-  - GitHub: Personal Access Token or GitHub App
-  - GitLab: Personal Access Token or Project Token
-- Optional: Redis for caching (recommended for production)
+Deploy to Vercel with Supabase for secure, scalable production use:
 
-### Quick Setup
+```bash
+# Quick deployment
+git clone https://github.com/Jita81/ADOMCP.git
+cd ADOMCP
+
+# Deploy to Vercel (one-click deployment)
+vercel
+
+# Configure Supabase for secure API key storage
+supabase init
+supabase db push
+```
+
+**👉 [Complete Deployment Guide](./DEPLOYMENT.md)**
+
+### 🔧 **Local Development**
+
+For local development and testing:
 
 ```bash
 # Clone the repository
@@ -62,85 +73,145 @@ git clone https://github.com/Jita81/ADOMCP.git
 cd ADOMCP
 
 # Install dependencies
-pip install -r azure-devops-ai-manufacturing-mcp/requirements.txt
+pip install -r requirements.txt
+
+# Start local MCP server
+python api/mcp-server.py
 ```
 
-### Production Installation
+### 📋 **Prerequisites**
 
-```bash
-# Create virtual environment
-python -m venv mcp_env
-source mcp_env/bin/activate  # On Windows: mcp_env\Scripts\activate
-
-# Install the module
-cd azure-devops-ai-manufacturing-mcp
-pip install -e .
-```
+- **For Production**: Vercel account, Supabase account
+- **For Development**: Python 3.8+, pip
+- **API Tokens**:
+  - Azure DevOps: Personal Access Token (PAT) with Work Item permissions
+  - GitHub: Personal Access Token with repo and issues permissions  
+  - GitLab: Personal Access Token with API permissions (optional)
 
 ## ⚙️ Configuration
 
-### Basic Configuration
+### 🔐 **Secure API Key Storage**
 
-```python
-config = {
-    'azure_devops_organization_url': 'https://dev.azure.com/YourOrg',
-    'azure_devops_pat': 'your_azure_devops_token_here',
-    'github_token': 'your_github_token_here',
-    'gitlab_token': 'your_gitlab_token_here',
-    'default_project': 'YourProject',
-    'rate_limit_rps': 10,
-    'burst_capacity': 100,
-    'enable_metrics': True
+Store your API keys securely in the deployed MCP server:
+
+```bash
+# Store Azure DevOps PAT
+curl -X POST https://your-mcp-server.vercel.app/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your-unique-user-id",
+    "platform": "azure_devops", 
+    "api_key": "your-azure-devops-pat",
+    "organization_url": "https://dev.azure.com/YourOrg",
+    "project_id": "your-project-guid"
+  }'
+
+# Store GitHub Token
+curl -X POST https://your-mcp-server.vercel.app/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "your-unique-user-id",
+    "platform": "github",
+    "api_key": "ghp_your-github-token"
+  }'
+```
+
+### 🤖 **MCP Client Configuration**
+
+Configure your MCP client to connect to the deployed server:
+
+```json
+{
+  "mcpServers": {
+    "azure-devops-mcp": {
+      "command": "curl",
+      "args": [
+        "-X", "POST",
+        "https://your-mcp-server.vercel.app/api/mcp",
+        "-H", "Content-Type: application/json",
+        "-d", "@-"
+      ]
+    }
+  }
 }
 ```
 
 ## 🚀 Quick Start
 
-### Basic Usage
+### 🎯 **MCP Protocol Usage**
 
-```python
-import asyncio
-from azure_devops_multiplatform_mcp import AzureDevOpsMultiPlatformMCP
-from azure_devops_multiplatform_mcp.types import WorkItemData
+Use standard MCP JSON-RPC calls to interact with the server:
 
-async def main():
-    config = {
-        'azure_devops_organization_url': 'https://dev.azure.com/YourOrg',
-        'azure_devops_pat': 'your_azure_devops_token_here',
-        'github_token': 'your_github_token_here',
-        'gitlab_token': 'your_gitlab_token_here',
-        'default_project': 'YourProject'
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "create_work_item",
+    "arguments": {
+      "user_id": "your-user-id",
+      "platform": "azure_devops",
+      "work_item_type": "User Story",
+      "title": "Authentication Service Implementation",
+      "description": "Implement OAuth-based authentication service",
+      "fields": {
+        "System.Tags": "authentication;security;oauth",
+        "Microsoft.VSTS.Common.Priority": "2",
+        "Custom.Tokens": 15000
+      }
     }
+  },
+  "id": 1
+}
+```
 
-    mcp = AzureDevOpsMultiPlatformMCP(config)
+### 📚 **Create Epic-Feature-Story Hierarchy**
 
-    async with mcp:
-        # Create a work item with flexible data structure and attachments
-        work_item_data = WorkItemData(
-            organization="YourOrg",
-            project="YourProject",
-            work_item_type="User Story",
-            title="Authentication Service Implementation",
-            description="Implement OAuth-based authentication service",
-            fields={
-                "System.Tags": "authentication;security;oauth",
-                "Microsoft.VSTS.Common.Priority": "2",
-                "Custom.Tokens": 15000  # Custom field example
-            },
-            attachments=[
-                # Optional: Add markdown documentation
-                # Attachments can be created separately and added here
-            ]
-        )
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "create_epic_feature_story",
+    "arguments": {
+      "user_id": "your-user-id",
+      "epic_title": "Authentication System Implementation",
+      "epic_description": "Complete OAuth-based authentication system",
+      "features": [
+        {
+          "title": "OAuth Integration Framework",
+          "description": "Third-party OAuth provider integration",
+          "stories": [
+            {
+              "title": "Google OAuth Implementation",
+              "description": "Implement Google OAuth 2.0 authentication flow"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "id": 2
+}
+```
 
-        # Create the work item
-        result = await mcp.create_work_item(work_item_data)
+### 📎 **Upload Documentation**
 
-        if result.success:
-            print(f"Created work item: {result.data['id']}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "upload_attachment",
+    "arguments": {
+      "user_id": "your-user-id",
+      "work_item_id": "64",
+      "content": "# Technical Requirements\n\n## Authentication Flow\n...",
+      "filename": "technical_requirements.md"
+    }
+  },
+  "id": 3
+}
 ```
 
 ## 📊 Workflow Integration
@@ -430,6 +501,20 @@ config = {
     'secure_configuration': True
 }
 ```
+
+## 📚 **Documentation**
+
+### **Complete Guides**
+- **[📖 User Guide](./USER_GUIDE.md)** - Comprehensive usage documentation
+- **[🚀 Deployment Guide](./DEPLOYMENT.md)** - Production deployment with Vercel + Supabase
+- **[🔧 API Reference](https://your-mcp-server.vercel.app/docs)** - Interactive API documentation
+- **[💡 Examples](https://your-mcp-server.vercel.app/api/docs/examples)** - Usage examples and samples
+
+### **Quick Links**
+- **[MCP Protocol Documentation](https://spec.modelcontextprotocol.io/)** - Official MCP specification
+- **[Azure DevOps API](https://docs.microsoft.com/en-us/rest/api/azure/devops/)** - Azure DevOps REST API reference
+- **[GitHub API](https://docs.github.com/en/rest)** - GitHub REST API documentation
+- **[Supabase Documentation](https://supabase.com/docs)** - Supabase platform documentation
 
 ## 🤝 Contributing
 
