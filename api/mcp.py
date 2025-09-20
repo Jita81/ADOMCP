@@ -4,37 +4,38 @@ MCP JSON-RPC endpoint for Vercel
 
 import json
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler
+import urllib.parse
 
-def handler(request):
-    """Simple Vercel handler for MCP endpoint"""
-    method = request.get('httpMethod', 'GET')
-    
-    if method == 'GET':
-        # Return MCP info for GET requests
-        return {
-            "statusCode": 200,
-            "headers": {
-                "Content-Type": "application/json"
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        
+        response = {
+            "service": "Azure DevOps Multi-Platform MCP",
+            "protocol": "JSON-RPC 2.0",
+            "version": "2.2.0",
+            "methods": ["tools/list", "tools/call"],
+            "timestamp": datetime.now().isoformat(),
+            "example_request": {
+                "jsonrpc": "2.0",
+                "method": "tools/list",
+                "id": 1
             },
-            "body": {
-                "service": "Azure DevOps Multi-Platform MCP",
-                "protocol": "JSON-RPC 2.0",
-                "version": "2.2.0",
-                "methods": ["tools/list", "tools/call"],
-                "timestamp": datetime.now().isoformat(),
-                "example_request": {
-                    "jsonrpc": "2.0",
-                    "method": "tools/list",
-                    "id": 1
-                },
-                "note": "Send POST requests for actual MCP operations"
-            }
+            "note": "Send POST requests for actual MCP operations"
         }
+        
+        self.wfile.write(json.dumps(response).encode())
+        return
     
-    elif method == 'POST':
-        # Handle JSON-RPC requests
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        
         try:
-            body = json.loads(request.get('body', '{}'))
+            body = json.loads(post_data.decode('utf-8'))
             method_name = body.get('method')
             params = body.get('params', {})
             request_id = body.get('id')
@@ -67,6 +68,20 @@ def handler(request):
                             },
                             "required": ["platform", "work_item_id", "updates"]
                         }
+                    },
+                    {
+                        "name": "upload_attachment",
+                        "description": "Upload a document and attach it to a work item",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "work_item_id": {"type": "integer"},
+                                "content": {"type": "string"},
+                                "filename": {"type": "string"},
+                                "project": {"type": "string"}
+                            },
+                            "required": ["work_item_id", "content", "filename", "project"]
+                        }
                     }
                 ]
                 
@@ -85,26 +100,37 @@ def handler(request):
                         "status": "success",
                         "message": f"Work item '{tool_args.get('title', 'Unknown')}' would be created",
                         "simulated": True,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
+                        "note": "This is a demo response. Real implementation requires API keys."
                     }
                 elif tool_name == "update_work_item":
                     result = {
                         "status": "success", 
                         "message": f"Work item #{tool_args.get('work_item_id', 'Unknown')} would be updated",
                         "simulated": True,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
+                        "note": "This is a demo response. Real implementation requires API keys."
+                    }
+                elif tool_name == "upload_attachment":
+                    result = {
+                        "status": "success",
+                        "message": f"Attachment '{tool_args.get('filename', 'Unknown')}' would be uploaded",
+                        "simulated": True,
+                        "timestamp": datetime.now().isoformat(),
+                        "note": "This is a demo response. Real implementation requires API keys."
                     }
                 else:
-                    response_body = {
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    
+                    error_response = {
                         "jsonrpc": "2.0",
                         "error": {"code": -32601, "message": f"Tool '{tool_name}' not found"},
                         "id": request_id
                     }
-                    return {
-                        "statusCode": 200,
-                        "headers": {"Content-Type": "application/json"},
-                        "body": response_body
-                    }
+                    self.wfile.write(json.dumps(error_response).encode())
+                    return
                 
                 response_body = {
                     "jsonrpc": "2.0",
@@ -113,40 +139,33 @@ def handler(request):
                 }
             
             else:
-                response_body = {
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                
+                error_response = {
                     "jsonrpc": "2.0",
                     "error": {"code": -32601, "message": f"Method '{method_name}' not found"},
                     "id": request_id
                 }
+                self.wfile.write(json.dumps(error_response).encode())
+                return
             
-            return {
-                "statusCode": 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
-                "body": response_body
-            }
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response_body).encode())
+            return
             
         except Exception as e:
-            return {
-                "statusCode": 500,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
-                "body": {
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32000, "message": f"Internal error: {str(e)}"},
-                    "id": None
-                }
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            error_response = {
+                "jsonrpc": "2.0",
+                "error": {"code": -32000, "message": f"Internal error: {str(e)}"},
+                "id": None
             }
-    
-    else:
-        return {
-            "statusCode": 405,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": {
-                "error": "Method not allowed. Use GET for info or POST for JSON-RPC requests."
-            }
-        }
+            self.wfile.write(json.dumps(error_response).encode())
+            return
