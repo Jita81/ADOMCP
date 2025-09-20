@@ -1,4 +1,8 @@
-# Requirements for ADOMCP with advanced security features
+# Railway deployment requirements for ADOMCP
+
+# Core web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.23.0
 
 # Core dependencies
 requests>=2.28.0
