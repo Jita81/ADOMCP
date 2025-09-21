@@ -597,5 +597,6 @@ async def main():
         await run_fastapi_server()
 
 if __name__ == "__main__":
-    asyncio.run(main())
-# Deployment trigger: Sun Sep 21 11:42:02 BST 2025
+    # Railway deployment - run FastAPI server directly
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(fastapi_app, host="0.0.0.0", port=port)
