@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "adomcp": {
+      "command": "python3",
+      "args": [
+        "/Users/paul.glover/Documents/Repos/ADOMCP/mcp_server_enhanced.py"
+      ],
+      "env": {
+        "AZURE_DEVOPS_PAT": "your_azure_devops_pat_here",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}

@@ -1,29 +1,19 @@
 #!/usr/bin/env python3
 """
-ADOMCP - Hybrid Architecture Implementation
-Supports both FastAPI HTTP endpoints AND MCP transports (STDIO, SSE, Streamable HTTP)
-Provides maximum compatibility with existing tools and Claude Desktop
+ADOMCP - Enhanced MCP Server Implementation with Full Claude Desktop Compatibility
+Includes tool titles, output schemas, and structured content support
 """
 
 import asyncio
 import os
 import logging
-import uvicorn
 from typing import Any, Dict, List, Optional, Union
 import aiohttp
 import json
-from contextlib import asynccontextmanager
+from urllib.parse import quote
 
-# FastAPI imports for existing HTTP endpoints
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
-
-# MCP SDK imports for Claude Desktop compatibility
+# MCP SDK imports - Using lowlevel Server for maximum control
 from mcp.server.lowlevel import Server
-from mcp.server.sse import SseServerTransport
-from mcp.server.stdio import stdio_server
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 import mcp.types as types
 from mcp.types import (
     Tool, ToolAnnotations, CallToolResult, 
@@ -39,7 +29,7 @@ AZURE_DEVOPS_ORG = "https://dev.azure.com/GenerativeAILab"
 AZURE_DEVOPS_PROJECT = "MCPTest"
 
 class AzureDevOpsIntegration:
-    """Handles real Azure DevOps API calls - shared between FastAPI and MCP"""
+    """Handles real Azure DevOps API calls"""
     
     def __init__(self, pat_token: str):
         self.pat_token = pat_token
@@ -137,18 +127,19 @@ class AzureDevOpsIntegration:
                         "status_code": response.status
                     }
 
-# ===== MCP SERVER IMPLEMENTATION =====
-
 # Create MCP Server with Claude Desktop compatibility
-mcp_server = Server("ADOMCP")
+app = Server("ADOMCP")
 
-@mcp_server.list_tools()
+@app.list_tools()
 async def list_tools() -> List[Tool]:
-    """List all available tools with Claude Desktop-compliant structure"""
+    """
+    List all available tools with Claude Desktop-compliant structure.
+    Each tool includes required title, descriptions, and output schemas.
+    """
     return [
         Tool(
             name="create_work_item",
-            title="Create Azure DevOps Work Item",
+            title="Create Azure DevOps Work Item",  # ✅ Required for Claude Desktop
             description="Create a new work item (User Story, Task, Bug, etc.) in Azure DevOps with title and description",
             annotations=ToolAnnotations(
                 title="Azure DevOps Work Item Creator",
@@ -158,12 +149,29 @@ async def list_tools() -> List[Tool]:
                 "type": "object",
                 "required": ["title"],
                 "properties": {
-                    "title": {"type": "string", "description": "The title of the work item", "minLength": 1},
-                    "description": {"type": "string", "description": "Optional description of the work item", "default": ""},
-                    "work_item_type": {"type": "string", "description": "Type of work item to create", "enum": ["User Story", "Task", "Bug", "Feature", "Epic"], "default": "User Story"},
-                    "pat_token": {"type": "string", "description": "Azure DevOps Personal Access Token (optional if environment variable set)"}
+                    "title": {
+                        "type": "string",
+                        "description": "The title of the work item",
+                        "minLength": 1
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of the work item",
+                        "default": ""
+                    },
+                    "work_item_type": {
+                        "type": "string", 
+                        "description": "Type of work item to create",
+                        "enum": ["User Story", "Task", "Bug", "Feature", "Epic"],
+                        "default": "User Story"
+                    },
+                    "pat_token": {
+                        "type": "string",
+                        "description": "Azure DevOps Personal Access Token (optional if environment variable set)"
+                    }
                 }
             },
+            # ✅ Output schema required for Claude Desktop structured responses
             outputSchema={
                 "type": "object",
                 "properties": {
@@ -180,20 +188,28 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="get_work_item", 
-            title="Get Azure DevOps Work Item",
+            title="Get Azure DevOps Work Item",  # ✅ Required for Claude Desktop
             description="Retrieve detailed information about a specific work item by its ID",
             annotations=ToolAnnotations(
                 title="Azure DevOps Work Item Retriever",
-                readOnlyHint=True
+                readOnlyHint=True  # This tool doesn't modify data
             ),
             inputSchema={
                 "type": "object",
                 "required": ["work_item_id"],
                 "properties": {
-                    "work_item_id": {"type": "integer", "description": "The ID of the work item to retrieve", "minimum": 1},
-                    "pat_token": {"type": "string", "description": "Azure DevOps Personal Access Token (optional if environment variable set)"}
+                    "work_item_id": {
+                        "type": "integer",
+                        "description": "The ID of the work item to retrieve",
+                        "minimum": 1
+                    },
+                    "pat_token": {
+                        "type": "string",
+                        "description": "Azure DevOps Personal Access Token (optional if environment variable set)"
+                    }
                 }
             },
+            # ✅ Output schema for structured work item data
             outputSchema={
                 "type": "object",
                 "properties": {
@@ -217,18 +233,22 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="get_projects",
-            title="List Azure DevOps Projects",
-            description="Get a list of all available Azure DevOps projects in the organization", 
+            title="List Azure DevOps Projects",  # ✅ Required for Claude Desktop
+            description="Get a list of all available Azure DevOps projects in the organization",
             annotations=ToolAnnotations(
                 title="Azure DevOps Project Lister",
-                readOnlyHint=True
+                readOnlyHint=True  # This tool doesn't modify data
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "pat_token": {"type": "string", "description": "Azure DevOps Personal Access Token (optional if environment variable set)"}
+                    "pat_token": {
+                        "type": "string",
+                        "description": "Azure DevOps Personal Access Token (optional if environment variable set)"
+                    }
                 }
             },
+            # ✅ Output schema for project list
             outputSchema={
                 "type": "object",
                 "properties": {
@@ -249,13 +269,67 @@ async def list_tools() -> List[Tool]:
                 },
                 "required": ["success"]
             }
+        ),
+        Tool(
+            name="update_work_item",
+            title="Update Azure DevOps Work Item",  # ✅ Required for Claude Desktop
+            description="Update an existing work item's title, description, or state",
+            annotations=ToolAnnotations(
+                title="Azure DevOps Work Item Updater",
+                readOnlyHint=False
+            ),
+            inputSchema={
+                "type": "object",
+                "required": ["work_item_id"],
+                "properties": {
+                    "work_item_id": {
+                        "type": "integer",
+                        "description": "The ID of the work item to update",
+                        "minimum": 1
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New title for the work item"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New description for the work item"
+                    },
+                    "state": {
+                        "type": "string",
+                        "description": "New state for the work item",
+                        "enum": ["New", "Active", "Resolved", "Test", "Closed"]
+                    },
+                    "pat_token": {
+                        "type": "string",
+                        "description": "Azure DevOps Personal Access Token (optional if environment variable set)"
+                    }
+                }
+            },
+            # ✅ Output schema for update results
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "work_item_id": {"type": "integer"},
+                    "title": {"type": "string"},
+                    "state": {"type": "string"},
+                    "url": {"type": "string"},
+                    "error": {"type": "string"}
+                },
+                "required": ["success"]
+            }
         )
     ]
 
-@mcp_server.call_tool()
+@app.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
-    """Execute tools with structured content support for Claude Desktop"""
+    """
+    Execute tools with structured content support for Claude Desktop.
+    Returns both text content and structured data.
+    """
     try:
+        # Get PAT token from arguments or environment
         pat_token = arguments.get("pat_token") or os.getenv("AZURE_DEVOPS_PAT")
         
         if name == "create_work_item":
@@ -269,6 +343,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
                     work_item_type=arguments.get("work_item_type", "User Story")
                 )
             
+            # Return both text and structured content for Claude Desktop
             text_content = f"Work item creation {'successful' if result.get('success') else 'failed'}"
             if result.get("success"):
                 text_content += f": #{result.get('work_item_id')} - {result.get('title')}"
@@ -277,7 +352,11 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
             
             return [
                 TextContent(type="text", text=text_content),
-                types.ContentBlock(type="structured", structuredContent=result)
+                # ✅ Structured content for Claude Desktop - using dict directly
+                {
+                    "type": "structured",
+                    "structuredContent": result
+                }
             ]
         
         elif name == "get_work_item":
@@ -296,7 +375,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
             
             return [
                 TextContent(type="text", text=text_content),
-                types.ContentBlock(type="structured", structuredContent=result)
+                {
+                    "type": "structured", 
+                    "structuredContent": result
+                }
             ]
         
         elif name == "get_projects":
@@ -314,14 +396,88 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
             
             return [
                 TextContent(type="text", text=text_content),
-                types.ContentBlock(type="structured", structuredContent=result)
+                {
+                    "type": "structured",
+                    "structuredContent": result
+                }
+            ]
+        
+        elif name == "update_work_item":
+            if not pat_token:
+                result = {"success": False, "error": "Azure DevOps PAT token required"}
+            else:
+                # Build update operations
+                updates = {}
+                if "title" in arguments:
+                    updates["title"] = arguments["title"]
+                if "description" in arguments:
+                    updates["description"] = arguments["description"]
+                if "state" in arguments:
+                    updates["state"] = arguments["state"]
+                
+                if not updates:
+                    result = {
+                        "success": False,
+                        "error": "At least one field (title, description, state) must be provided for update"
+                    }
+                else:
+                    azure = AzureDevOpsIntegration(pat_token)
+                    url = f"{azure.base_url}/wit/workitems/{arguments['work_item_id']}?api-version=7.1-preview.3"
+                    
+                    # Build patch operations
+                    patch_ops = []
+                    if "title" in updates:
+                        patch_ops.append({"op": "replace", "path": "/fields/System.Title", "value": updates["title"]})
+                    if "description" in updates:
+                        patch_ops.append({"op": "replace", "path": "/fields/System.Description", "value": updates["description"]})
+                    if "state" in updates:
+                        patch_ops.append({"op": "replace", "path": "/fields/System.State", "value": updates["state"]})
+                    
+                    async with aiohttp.ClientSession() as session:
+                        headers = azure.headers.copy()
+                        headers["Content-Type"] = "application/json-patch+json"
+                        
+                        async with session.patch(url, json=patch_ops, headers=headers) as response:
+                            if response.status == 200:
+                                update_result = await response.json()
+                                result = {
+                                    "success": True,
+                                    "work_item_id": update_result.get("id"),
+                                    "title": update_result.get("fields", {}).get("System.Title"),
+                                    "state": update_result.get("fields", {}).get("System.State"),
+                                    "url": update_result.get("_links", {}).get("html", {}).get("href")
+                                }
+                            else:
+                                error_text = await response.text()
+                                result = {
+                                    "success": False,
+                                    "error": f"HTTP {response.status}: {error_text}",
+                                    "status_code": response.status
+                                }
+            
+            text_content = f"Work item update {'successful' if result.get('success') else 'failed'}"
+            if result.get("success"):
+                text_content += f": #{result.get('work_item_id')} - {result.get('title')}"
+            else:
+                text_content += f": {result.get('error')}"
+            
+            return [
+                TextContent(type="text", text=text_content),
+                {
+                    "type": "structured",
+                    "structuredContent": result
+                }
             ]
         
         else:
+            # Unknown tool
             error_result = {"success": False, "error": f"Unknown tool: {name}"}
             return [
                 TextContent(type="text", text=f"Error: Unknown tool '{name}'"),
-                types.ContentBlock(type="structured", structuredContent=error_result)
+                types.ContentBlock(
+                    type="structured",
+                    structuredContent=error_result
+                )
             ]
     
     except Exception as e:
@@ -329,272 +485,22 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[ContentBlock]:
         error_result = {"success": False, "error": f"Exception: {str(e)}"}
         return [
             TextContent(type="text", text=f"Error executing {name}: {str(e)}"),
-            types.ContentBlock(type="structured", structuredContent=error_result)
+            {
+                "type": "structured", 
+                "structuredContent": error_result
+            }
         ]
 
-# ===== FASTAPI HTTP SERVER IMPLEMENTATION =====
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifecycle"""
-    logger.info("🚀 Starting ADOMCP Hybrid Server")
-    logger.info("✅ FastAPI HTTP endpoints available")
-    logger.info("✅ MCP transports available (SSE, Streamable HTTP)")
-    yield
-    logger.info("🛑 Shutting down ADOMCP Hybrid Server")
-
-# Create FastAPI app
-fastapi_app = FastAPI(
-    title="ADOMCP - Hybrid Architecture",
-    description="Azure DevOps integration with FastAPI HTTP + MCP protocol support",
-    version="2.0.0",
-    lifespan=lifespan
-)
-
-# Add CORS middleware
-fastapi_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Preserve existing HTTP endpoints for backward compatibility
-@fastapi_app.post("/api/azure-devops")
-async def azure_devops_endpoint(request: Dict[str, Any]):
-    """Legacy Azure DevOps HTTP endpoint"""
-    try:
-        operation = request.get("operation")
-        pat_token = request.get("pat_token") or request.get("test_pat_token") or os.getenv("AZURE_DEVOPS_PAT")
-        
-        if not pat_token:
-            return {"error": "PAT token required", "api_response": "ERROR"}
-        
-        azure = AzureDevOpsIntegration(pat_token)
-        
-        if operation == "create_work_item":
-            result = await azure.create_work_item(
-                title=request.get("title", ""),
-                description=request.get("description", ""),
-                work_item_type=request.get("work_item_type", "User Story")
-            )
-            return {
-                "api_response": "REAL_API_SUCCESS" if result.get("success") else "REAL_API_ERROR",
-                "work_item_id": result.get("work_item_id"),
-                **result
-            }
-        
-        elif operation == "get_work_item":
-            result = await azure.get_work_item(request.get("work_item_id"))
-            return {
-                "api_response": "REAL_API_SUCCESS" if result.get("success") else "REAL_API_ERROR",
-                **result
-            }
-        
-        elif operation == "get_projects":
-            result = await azure.get_projects()
-            return {
-                "api_response": "REAL_API_SUCCESS" if result.get("success") else "REAL_API_ERROR",
-                **result
-            }
-        
-        else:
-            return {"error": f"Unknown operation: {operation}", "api_response": "ERROR"}
-    
-    except Exception as e:
-        logger.error(f"Error in Azure DevOps endpoint: {e}")
-        return {"error": str(e), "api_response": "ERROR"}
-
-@fastapi_app.get("/api/capabilities")
-async def capabilities():
-    """Capability negotiation endpoint"""
-    return {
-        "capabilities": {
-            "tools": {"listChanged": True},
-            "logging": {},
-            "completions": {}
-        },
-        "protocolVersion": "2025-06-18",
-        "serverInfo": {
-            "name": "ADOMCP",
-            "version": "2.0.0"
-        }
-    }
-
-# MCP JSON-RPC endpoint for basic compatibility
-@fastapi_app.post("/api/mcp")
-async def mcp_jsonrpc_endpoint(request: Dict[str, Any]):
-    """Basic MCP JSON-RPC endpoint for simple integrations"""
-    try:
-        method = request.get("method")
-        
-        if method == "tools/list":
-            tools = await list_tools()
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "tools": [
-                        {
-                            "name": tool.name,
-                            "title": tool.title,
-                            "description": tool.description,
-                            "inputSchema": tool.inputSchema,
-                            "outputSchema": tool.outputSchema,
-                            "annotations": tool.annotations.model_dump() if tool.annotations else None
-                        }
-                        for tool in tools
-                    ]
-                },
-                "id": request.get("id")
-            }
-        
-        elif method == "tools/call":
-            params = request.get("params", {})
-            tool_name = params.get("name")
-            arguments = params.get("arguments", {})
-            
-            result_blocks = await call_tool(tool_name, arguments)
-            
-            # Extract structured content if available
-            content = []
-            structured_content = None
-            
-            for block in result_blocks:
-                if hasattr(block, 'type'):
-                    if block.type == "text":
-                        content.append({"type": "text", "text": block.text})
-                    elif block.type == "structured":
-                        structured_content = block.structuredContent
-            
-            return {
-                "jsonrpc": "2.0",
-                "result": {
-                    "content": content,
-                    "structuredContent": structured_content,
-                    "isError": False
-                },
-                "id": request.get("id")
-            }
-        
-        else:
-            return {
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32603,
-                    "message": "Internal error",
-                    "data": f"400: Unknown method: {method}"
-                },
-                "id": request.get("id")
-            }
-    
-    except Exception as e:
-        logger.error(f"Error in MCP JSON-RPC endpoint: {e}")
-        return {
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": "Internal error",
-                "data": str(e)
-            },
-            "id": request.get("id")
-        }
-
-# SSE endpoint for MCP Server-Sent Events transport
-@fastapi_app.get("/api/sse")
-async def sse_endpoint():
-    """SSE transport endpoint for Claude Desktop"""
-    
-    async def event_generator():
-        # Create SSE transport
-        transport = SseServerTransport()
-        
-        # Initialize connection
-        yield "data: {\"type\": \"connection\", \"status\": \"connected\"}\n\n"
-        
-        # Handle SSE communication with MCP server
-        try:
-            # This would normally handle the SSE protocol
-            # For now, return basic capability info
-            capabilities = {
-                "type": "capabilities",
-                "capabilities": {
-                    "tools": {"listChanged": True},
-                    "logging": {},
-                    "completions": {}
-                },
-                "protocolVersion": "2025-06-18"
-            }
-            yield f"data: {json.dumps(capabilities)}\n\n"
-            
-        except Exception as e:
-            logger.error(f"SSE error: {e}")
-            yield f"data: {{\"type\": \"error\", \"message\": \"{str(e)}\"}}\n\n"
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*"
-        }
-    )
-
-# Streamable HTTP endpoint for MCP Streamable HTTP transport
-@fastapi_app.post("/api/streamable-http")
-@fastapi_app.get("/api/streamable-http")
-async def streamable_http_endpoint(request: Request):
-    """Streamable HTTP transport endpoint for Claude Desktop"""
-    try:
-        # Create session manager
-        session_manager = StreamableHTTPSessionManager(
-            app=mcp_server,
-            json_response=True
-        )
-        
-        # Handle the streamable HTTP request
-        scope = request.scope
-        receive = request.receive
-        
-        async def send(response):
-            # This would normally handle the streamable HTTP protocol
-            pass
-        
-        await session_manager.handle_request(scope, receive, send)
-        
-        return {"status": "handled"}
-    
-    except Exception as e:
-        logger.error(f"Streamable HTTP error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def run_stdio_server():
-    """Run MCP server with STDIO transport for Claude Desktop"""
-    logger.info("🔌 Starting STDIO transport for Claude Desktop")
-    await stdio_server(mcp_server)
-
-async def run_fastapi_server():
-    """Run FastAPI server for HTTP endpoints"""
-    config = uvicorn.Config(
-        fastapi_app,
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 8000)),
-        log_level="info"
-    )
-    server = uvicorn.Server(config)
-    await server.serve()
-
 async def main():
-    """Main entry point - determine which transport to use"""
+    """Run the MCP server with STDIO transport for Claude Desktop"""
+    # Use STDIO transport for Claude Desktop compatibility
+    from mcp.server.stdio import stdio_server
     
-    # Check if running in STDIO mode (Claude Desktop)
-    if os.getenv("MCP_TRANSPORT") == "stdio" or len(os.sys.argv) > 1 and os.sys.argv[1] == "--stdio":
-        await run_stdio_server()
-    else:
-        # Default to FastAPI HTTP server (Railway deployment)
-        await run_fastapi_server()
+    logger.info("🚀 Starting ADOMCP Enhanced MCP Server for Claude Desktop")
+    logger.info("✅ Features: Tool titles, output schemas, structured content")
+    logger.info("🔌 Transport: STDIO (Claude Desktop compatible)")
+    
+    await stdio_server(app)
 
 if __name__ == "__main__":
     asyncio.run(main())
